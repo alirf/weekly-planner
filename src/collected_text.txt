@@ -1,0 +1,1537 @@
+======================================================================
+📁 پوشه مبدا: D:\weekly-planner\src
+📊 تعداد فایل‌های جمع‌آوری شده: 17
+❌ تعداد خطاها: 0
+📁 پوشه‌های رد شده: coverage, target, .env, venv, .output, build, .next, __pycache__, static, public, node_modules, assets, .idea, env, .nuxt, .venv, .git, dist, out, .vscode
+======================================================================
+⚡ فقط پسوندهای: .py, .js, .tsx, .jsx, .java, .ts, .css
+======================================================================
+
+
+──────────────────────────────────────────────────────────────────────
+📄 App.css
+──────────────────────────────────────────────────────────────────────
+.counter {
+  font-size: 16px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 2px solid transparent;
+  transition: border-color 0.3s;
+  margin-bottom: 24px;
+
+  &:hover {
+    border-color: var(--accent-border);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+.hero {
+  position: relative;
+
+  .base,
+  .framework,
+  .vite {
+    inset-inline: 0;
+    margin: 0 auto;
+  }
+
+  .base {
+    width: 170px;
+    position: relative;
+    z-index: 0;
+  }
+
+  .framework,
+  .vite {
+    position: absolute;
+  }
+
+  .framework {
+    z-index: 1;
+    top: 34px;
+    height: 28px;
+    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
+      scale(1.4);
+  }
+
+  .vite {
+    z-index: 0;
+    top: 107px;
+    height: 26px;
+    width: auto;
+    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
+      scale(0.8);
+  }
+}
+
+#center {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  place-content: center;
+  place-items: center;
+  flex-grow: 1;
+
+  @media (max-width: 1024px) {
+    padding: 32px 20px 24px;
+    gap: 18px;
+  }
+}
+
+#next-steps {
+  display: flex;
+  border-top: 1px solid var(--border);
+  text-align: left;
+
+  & > div {
+    flex: 1 1 0;
+    padding: 32px;
+    @media (max-width: 1024px) {
+      padding: 24px 20px;
+    }
+  }
+
+  .icon {
+    margin-bottom: 16px;
+    width: 22px;
+    height: 22px;
+  }
+
+  @media (max-width: 1024px) {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+#docs {
+  border-right: 1px solid var(--border);
+
+  @media (max-width: 1024px) {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+#next-steps ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  gap: 8px;
+  margin: 32px 0 0;
+
+  .logo {
+    height: 18px;
+  }
+
+  a {
+    color: var(--text-h);
+    font-size: 16px;
+    border-radius: 6px;
+    background: var(--social-bg);
+    display: flex;
+    padding: 6px 12px;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    transition: box-shadow 0.3s;
+
+    &:hover {
+      box-shadow: var(--shadow);
+    }
+    .button-icon {
+      height: 18px;
+      width: 18px;
+    }
+  }
+
+  @media (max-width: 1024px) {
+    margin-top: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+
+    li {
+      flex: 1 1 calc(50% - 8px);
+    }
+
+    a {
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+  }
+}
+
+#spacer {
+  height: 88px;
+  border-top: 1px solid var(--border);
+  @media (max-width: 1024px) {
+    height: 48px;
+  }
+}
+
+.ticks {
+  position: relative;
+  width: 100%;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    top: -4.5px;
+    border: 5px solid transparent;
+  }
+
+  &::before {
+    left: 0;
+    border-left-color: var(--border);
+  }
+  &::after {
+    right: 0;
+    border-right-color: var(--border);
+  }
+}
+
+
+──────────────────────────────────────────────────────────────────────
+📄 App.jsx
+──────────────────────────────────────────────────────────────────────
+import { useRef, useState } from "react";
+import { DAYS } from "./constants";
+import { useSchedule } from "./hooks/useSchedule";
+import { exportToJPG } from "./utils/exportImage";
+import { useCallback } from "react";
+import { useTheme } from "./hooks/useTheme";
+import DayColumn from "./components/DayColumn";
+import TimeRuler from "./components/TimeRuler";
+import TaskEditor from "./components/TaskEditor";
+import CategoryManager from "./components/CategoryManager";
+import Toolbar from "./components/Toolbar";
+
+export default function App() {
+  const {
+    schedule,
+    categories,
+    addTask,
+    updateTask,
+    removeTask,
+    clearAll,
+    addCategory,
+    updateCategory,
+    removeCategory,
+    saveAsTemplate,
+    loadTemplate,
+    getTemplates,
+    liveUpdateTask,
+  } = useSchedule();
+
+  const [editor, setEditor] = useState({
+    open: false,
+    dayKey: null,
+    task: null,
+  });
+  const [showCategories, setShowCategories] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [templates, setTemplates] = useState(() => getTemplates());
+
+  const gridRef = useRef(null);
+
+  const openAdd = (dayKey) =>
+    setEditor({ open: true, dayKey, task: null });
+
+  const openEdit = (dayKey, task) =>
+    setEditor({ open: true, dayKey, task });
+
+  const closeEditor = () =>
+    setEditor({ open: false, dayKey: null, task: null });
+
+  const handleSave = (newTask) => {
+    if (editor.task) {
+      updateTask(editor.dayKey, editor.task.id, newTask);
+    } else {
+      addTask(editor.dayKey, newTask);
+    }
+    closeEditor();
+  };
+
+  const handleDelete = () => {
+    if (editor.task) {
+      removeTask(editor.dayKey, editor.task.id);
+      closeEditor();
+    }
+  };
+
+  const handleExport = async () => {
+    if (!gridRef.current) return;
+    setExporting(true);
+    try {
+      const date = new Date().toISOString().slice(0, 10);
+      await exportToJPG(gridRef.current, `weekly-plan-${date}.jpg`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleSaveTemplate = () => {
+    saveAsTemplate();
+    setTemplates(getTemplates());
+  };
+
+  const handleLoadTemplate = (name) => {
+    loadTemplate(name);
+  };
+
+  const handleLiveChange = useCallback(
+  (dayKey, taskId, patch) => {
+    liveUpdateTask(dayKey, taskId, patch);
+  },
+  [liveUpdateTask]
+  );
+
+  const handleCommitChange = useCallback(
+  (dayKey, taskId) => {
+    // مرتب‌سازی نهایی
+    const task = schedule[dayKey].find((t) => t.id === taskId);
+    if (task) {
+      updateTask(dayKey, taskId, {
+        start: task.start,
+        end: task.end,
+      });
+    }
+  },
+  [schedule, updateTask]
+  );
+
+  const { theme, toggleTheme } = useTheme();
+
+  const dayLabel =
+    DAYS.find((d) => d.key === editor.dayKey)?.label ?? "";
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <Toolbar
+        onExport={handleExport}
+        onClearAll={clearAll}
+        onOpenCategories={() => setShowCategories(true)}
+        onSaveTemplate={handleSaveTemplate}
+        onLoadTemplate={handleLoadTemplate}
+        templates={templates}
+        exporting={exporting}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+
+      <main className="max-w-[1500px] mx-auto p-4">
+        <div
+          ref={gridRef}
+          className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors"
+        >
+          <div className="flex">
+            <TimeRuler />
+            {DAYS.map((day) => (
+              <DayColumn
+                key={day.key}
+                day={day}
+                tasks={schedule[day.key] ?? []}
+                categories={categories}
+                onAdd={openAdd}
+                onEditTask={openEdit}
+                onLiveChange={(taskId, patch) =>
+                  liveUpdateTask(day.key, taskId, patch)
+                }
+              />
+            ))}
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-3 text-center">
+          💡 روی فضای خالی ستون یا دکمه‌ی «+ افزودن» کلیک کن. برای ویرایش، روی تسک بزن.
+        </p>
+      </main>
+
+      <TaskEditor
+        open={editor.open}
+        dayKey={editor.dayKey}
+        dayLabel={dayLabel}
+        task={editor.task}
+        tasks={editor.dayKey ? schedule[editor.dayKey] : []}
+        categories={categories}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        onClose={closeEditor}
+      />
+
+      <CategoryManager
+        open={showCategories}
+        categories={categories}
+        onAdd={addCategory}
+        onUpdate={updateCategory}
+        onRemove={removeCategory}
+        onClose={() => setShowCategories(false)}
+      />
+    </div>
+  );
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 components/CategoryManager.jsx
+──────────────────────────────────────────────────────────────────────
+import { useState } from "react";
+
+const COLORS = [
+  "#3b82f6", "#f59e0b", "#10b981", "#ec4899", "#8b5cf6",
+  "#ef4444", "#06b6d4", "#84cc16", "#f97316", "#6b7280",
+];
+
+export default function CategoryManager({
+  open,
+  categories,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onClose,
+}) {
+  const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState(COLORS[0]);
+
+  if (!open) return null;
+
+  const handleAdd = () => {
+    if (!newName.trim()) return;
+    const id = "cat_" + crypto.randomUUID().slice(0, 8);
+    onAdd({ id, name: newName.trim(), color: newColor });
+    setNewName("");
+    setNewColor(COLORS[0]);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg p-5 max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700 transition-colors"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold mb-4 text-slate-800 dark:text-slate-100">
+          🎨 مدیریت دسته‌ها
+        </h2>
+
+        {/* لیست دسته‌های موجود */}
+        <div className="space-y-2 mb-5">
+          {categories.map((cat) => (
+            <div
+              key={cat.id}
+              className="flex items-center gap-3 p-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+            >
+              <input
+                type="color"
+                value={cat.color}
+                onChange={(e) => onUpdate(cat.id, { color: e.target.value })}
+                className="w-9 h-9 rounded-lg cursor-pointer border-none bg-transparent"
+                style={{ padding: 0 }}
+              />
+              <input
+                value={cat.name}
+                onChange={(e) => onUpdate(cat.id, { name: e.target.value })}
+                className="flex-1 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-colors"
+              />
+              <button
+                onClick={() => onRemove(cat.id)}
+                className="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 w-8 h-8 rounded-lg text-sm flex items-center justify-center transition-colors"
+                title="حذف"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+
+          {categories.length === 0 && (
+            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-4">
+              هنوز دسته‌ای نداری
+            </p>
+          )}
+        </div>
+
+        {/* افزودن دسته جدید */}
+        <div className="border-t border-slate-200 dark:border-slate-700 pt-4 transition-colors">
+          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">
+            ➕ افزودن دسته‌ی جدید
+          </h3>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={newColor}
+              onChange={(e) => setNewColor(e.target.value)}
+              className="w-10 h-10 rounded-lg cursor-pointer border-none bg-transparent shrink-0"
+              style={{ padding: 0 }}
+            />
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+              placeholder="نام دسته"
+              className="flex-1 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-colors"
+            />
+            <button
+              onClick={handleAdd}
+              className="bg-gradient-to-br from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg transition-all shrink-0"
+            >
+              افزودن
+            </button>
+          </div>
+
+          {/* رنگ‌های پیشنهادی */}
+          <div className="flex flex-wrap gap-2 mt-3">
+            {COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setNewColor(c)}
+                className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 shadow-sm"
+                style={{
+                  background: c,
+                  borderColor:
+                    newColor === c
+                      ? "#0f172a"
+                      : "rgba(0,0,0,0.05)",
+                  boxShadow:
+                    newColor === c
+                      ? "0 0 0 2px white, 0 0 0 4px " + c
+                      : "none",
+                }}
+                title={c}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-end mt-5 pt-4 border-t border-slate-100 dark:border-slate-700 transition-colors">
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+          >
+            بستن
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 components/DayColumn.jsx
+──────────────────────────────────────────────────────────────────────
+import { COLUMN_HEIGHT } from "../constants";
+import TaskBlock from "./TaskBlock";
+
+export default function DayColumn({
+  day, tasks, categories, onAdd, onEditTask, onLiveChange,
+}) {
+  const isToday =
+    new Date().toLocaleDateString("fa-IR", { weekday: "long" }) === day.label;
+
+  return (
+    <div className="flex-1 min-w-[130px] border-l border-slate-200 dark:border-slate-700 relative transition-colors">
+      <div
+        className={`sticky top-0 z-10 h-10 border-b flex items-center justify-center font-bold text-sm transition-colors ${
+          isToday
+            ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
+        }`}
+      >
+        {day.label}
+        {isToday && (
+          <span className="mr-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+        )}
+      </div>
+
+      <div
+        onClick={(e) => e.target === e.currentTarget && onAdd(day.key)}
+        className="relative cursor-pointer hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
+        style={{ height: `${COLUMN_HEIGHT}px` }}
+      >
+        {Array.from({ length: 18 }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute right-0 left-0 border-t border-slate-100 dark:border-slate-800 pointer-events-none"
+            style={{ top: `${i * 60}px` }}
+          />
+        ))}
+
+        {tasks.map((task) => (
+          <TaskBlock
+            key={task.id}
+            task={task}
+            category={categories.find((c) => c.id === task.categoryId)}
+            onClick={() => onEditTask(day.key, task)}
+            onLiveChange={onLiveChange}
+            onCommitChange={onCommitChange}
+          />
+        ))}
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onAdd(day.key);
+          }}
+          className="absolute bottom-2 right-1/2 translate-x-1/2 bg-white dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 rounded-lg text-xs px-3 py-1 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-400 dark:hover:border-blue-500 transition-colors shadow-sm z-10"
+        >
+          + افزودن
+        </button>
+      </div>
+    </div>
+  );
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 components/TaskBlock.jsx
+──────────────────────────────────────────────────────────────────────
+import { PX_PER_MINUTE, DAY_START_MIN } from "../constants";
+import { minutesToHHMM, formatDuration } from "../utils/time";
+import { useDragResize } from "../hooks/useDragResize";
+
+export default function TaskBlock({
+  task,
+  category,
+  onClick,
+  onLiveChange,
+  onCommitChange,
+}) {
+  const { dragging, handleMouseDown, wasDragged } = useDragResize({
+    task,
+    onLiveChange: (patch) => onLiveChange(task.id, patch),
+  });
+
+  const top = (task.start - DAY_START_MIN) * PX_PER_MINUTE;
+  const duration = task.end - task.start;
+  const height = Math.max(duration * PX_PER_MINUTE, 10);
+
+  const bg = category?.color ?? "#6b7280";
+  const compact = height < 44;
+  const showTime = height >= 44;
+  const showDetails = height >= 90;
+  const showDuration = height >= 130;
+
+  const isDragging = dragging !== null;
+
+  const handleClick = (e) => {
+    e.stopPropagation();
+    if (wasDragged()) return;
+    onClick();
+  };
+
+  return (
+    <div
+      className={`task-block absolute right-1 left-1 rounded-lg overflow-hidden cursor-grab select-none group ${
+        isDragging
+          ? "z-40 shadow-2xl ring-2 ring-white/80 dark:ring-white/40 scale-[1.02]"
+          : "shadow-md hover:shadow-lg hover:z-20"
+      }`}
+      style={{
+        top: `${top}px`,
+        height: `${height}px`,
+        background: `linear-gradient(135deg, ${bg} 0%, ${shadeColor(bg, -15)} 100%)`,
+        borderRight: `4px solid ${shadeColor(bg, -30)}`,
+      }}
+      onClick={handleClick}
+    >
+      <div
+        onMouseDown={(e) => handleMouseDown("top", e)}
+        className="absolute top-0 right-0 left-0 h-2 cursor-ns-resize z-30 
+                   opacity-0 group-hover:opacity-100 transition-opacity
+                   bg-white/40 hover:bg-white/60"
+        title="تغییر ساعت شروع"
+      />
+
+      <div
+        onMouseDown={(e) => handleMouseDown("bottom", e)}
+        className="absolute bottom-0 right-0 left-0 h-2 cursor-ns-resize z-30 
+                   opacity-0 group-hover:opacity-100 transition-opacity
+                   bg-white/40 hover:bg-white/60"
+        title="تغییر ساعت پایان"
+      />
+
+      <div className="px-2.5 py-1.5 pointer-events-none h-full flex flex-col text-white">
+        <div className="flex items-start gap-1.5">
+          <div className="text-[12px] font-bold leading-tight truncate flex-1 drop-shadow-sm">
+            {task.title || "(بدون عنوان)"}
+          </div>
+          {!compact && showDuration && (
+            <span className="text-[9px] bg-black/20 rounded-full px-1.5 py-0.5 whitespace-nowrap backdrop-blur-sm">
+              {formatDuration(duration)}
+            </span>
+          )}
+        </div>
+
+        {showTime && (
+          <div className="text-[10px] opacity-95 leading-tight mt-0.5 tabular-nums flex items-center gap-1">
+            <span className="inline-block w-1 h-1 rounded-full bg-white/80" />
+            {minutesToHHMM(task.start)} — {minutesToHHMM(task.end)}
+          </div>
+        )}
+
+        {showDetails && task.details && (
+          <div className="text-[10px] opacity-80 mt-1 leading-tight line-clamp-3 border-t border-white/20 pt-1">
+            {task.details}
+          </div>
+        )}
+
+        {showDetails && !task.details && (
+          <div className="text-[10px] opacity-40 mt-1 italic">
+            بدون توضیحات
+          </div>
+        )}
+      </div>
+
+      <div
+        onMouseDown={(e) => handleMouseDown("move", e)}
+        className="absolute inset-x-0 top-2 bottom-2 cursor-grab z-10"
+      />
+    </div>
+  );
+}
+
+function shadeColor(hex, percent) {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = Math.max(0, Math.min(255, (num >> 16) + amt));
+  const G = Math.max(0, Math.min(255, ((num >> 8) & 0x00ff) + amt));
+  const B = Math.max(0, Math.min(255, (num & 0x0000ff) + amt));
+  return "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 components/TaskEditor.jsx
+──────────────────────────────────────────────────────────────────────
+import { useState, useEffect } from "react";
+import { DAY_START_MIN, DAY_END_MIN } from "../constants";
+import { minutesToHHMM, hhmmToMinutes, formatDuration } from "../utils/time";
+import { findOverlap } from "../utils/overlap";
+
+export default function TaskEditor({
+  open,
+  dayKey,
+  dayLabel,
+  task,
+  tasks,
+  categories,
+  onSave,
+  onDelete,
+  onClose,
+}) {
+  const [form, setForm] = useState({
+    title: "",
+    details: "",
+    start: "07:00",
+    end: "08:00",
+    categoryId: "work",
+  });
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (task) {
+      setForm({
+        title: task.title ?? "",
+        details: task.details ?? "",
+        start: minutesToHHMM(task.start),
+        end: minutesToHHMM(task.end),
+        categoryId: task.categoryId ?? categories[0]?.id,
+      });
+    } else {
+      setForm({
+        title: "",
+        details: "",
+        start: "07:00",
+        end: "08:00",
+        categoryId: categories[0]?.id,
+      });
+    }
+    setError("");
+  }, [task, open, categories]);
+
+  if (!open) return null;
+
+  const duration = hhmmToMinutes(form.end) - hhmmToMinutes(form.start);
+
+  const handleSave = () => {
+    const start = hhmmToMinutes(form.start);
+    const end = hhmmToMinutes(form.end);
+
+    if (!form.title.trim()) {
+      setError("عنوان رو وارد کن");
+      return;
+    }
+    if (start >= end) {
+      setError("ساعت پایان باید بعد از شروع باشه");
+      return;
+    }
+    if (start < DAY_START_MIN || end > DAY_END_MIN) {
+      setError("ساعت باید بین ۷ صبح تا ۱۲ شب باشه");
+      return;
+    }
+    if (end - start < 5) {
+      setError("مدت زمان باید حداقل ۵ دقیقه باشه");
+      return;
+    }
+
+    const overlap = findOverlap(tasks, start, end, task?.id);
+    if (overlap) {
+      setError(
+        `هم‌پوشانی با «${overlap.title}» (${minutesToHHMM(
+          overlap.start
+        )} – ${minutesToHHMM(overlap.end)})`
+      );
+      return;
+    }
+
+    onSave({
+      id: task?.id ?? crypto.randomUUID(),
+      title: form.title.trim(),
+      details: form.details.trim(),
+      start,
+      end,
+      categoryId: form.categoryId,
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-5 max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700 transition-colors"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold mb-4 text-slate-800 dark:text-slate-100">
+          {task ? "✏️ ویرایش" : "➕ افزودن"} تسک
+          <span className="text-sm font-normal text-slate-500 dark:text-slate-400 mr-2">
+            — {dayLabel}
+          </span>
+        </h2>
+
+        <div className="space-y-3">
+          {/* عنوان */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+              عنوان
+            </label>
+            <input
+              autoFocus
+              className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-colors"
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              placeholder="مثلاً: جلسه تیم"
+            />
+          </div>
+
+          {/* ساعت */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                شروع
+              </label>
+              <input
+                type="time"
+                className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-colors [color-scheme:light] dark:[color-scheme:dark]"
+                value={form.start}
+                onChange={(e) => setForm({ ...form, start: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                پایان
+              </label>
+              <input
+                type="time"
+                className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-colors [color-scheme:light] dark:[color-scheme:dark]"
+                value={form.end}
+                onChange={(e) => setForm({ ...form, end: e.target.value })}
+              />
+            </div>
+          </div>
+
+          {duration > 0 && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+              ⏱ مدت: {formatDuration(duration)}
+            </p>
+          )}
+
+          {/* دسته */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+              دسته
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {categories.map((cat) => {
+                const selected = form.categoryId === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setForm({ ...form, categoryId: cat.id })}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border-2 transition-all ${
+                      selected
+                        ? "text-white border-transparent scale-105 shadow-md"
+                        : "text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 hover:scale-105"
+                    }`}
+                    style={
+                      selected
+                        ? { background: cat.color }
+                        : { borderColor: cat.color + "80" }
+                    }
+                  >
+                    {cat.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* جزئیات */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+              جزئیات (اختیاری)
+            </label>
+            <textarea
+              rows={3}
+              className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-colors"
+              value={form.details}
+              onChange={(e) => setForm({ ...form, details: e.target.value })}
+              placeholder="توضیحات بیشتر..."
+            />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-xs px-3 py-2 rounded-lg border border-red-200 dark:border-red-800 transition-colors">
+              ⚠️ {error}
+            </div>
+          )}
+        </div>
+
+        {/* دکمه‌ها */}
+        <div className="flex justify-between items-center mt-5 pt-4 border-t border-slate-100 dark:border-slate-700 transition-colors">
+          <div>
+            {task && (
+              <button
+                onClick={onDelete}
+                className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
+              >
+                🗑 حذف
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-1.5 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              انصراف
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg transition-all"
+            >
+              ذخیره
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 components/TimeRuler.jsx
+──────────────────────────────────────────────────────────────────────
+import { buildHourMarks, minutesToHHMM } from "../utils/time";
+import { COLUMN_HEIGHT } from "../constants";
+
+const marks = buildHourMarks(30);
+
+export default function TimeRuler() {
+  return (
+    <div className="w-16 shrink-0 relative bg-slate-50 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 transition-colors">
+      <div className="h-10 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-center text-xs text-slate-500 dark:text-slate-400 font-bold transition-colors">
+        ساعت
+      </div>
+
+      <div className="relative" style={{ height: `${COLUMN_HEIGHT}px` }}>
+        {marks.map((min) => {
+          const isHour = min % 60 === 0;
+          const top = min - marks[0];
+          return (
+            <div
+              key={min}
+              className="absolute right-0 left-0 flex justify-start"
+              style={{ top: `${top}px`, transform: "translateY(-6px)" }}
+            >
+              {isHour ? (
+                <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 tabular-nums pr-2 leading-none">
+                  {minutesToHHMM(min)}
+                </span>
+              ) : (
+                <span className="text-[9px] text-slate-300 dark:text-slate-600 pr-2 leading-none">
+                  {minutesToHHMM(min)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 components/Toolbar.jsx
+──────────────────────────────────────────────────────────────────────
+export default function Toolbar({
+  onExport,
+  onClearAll,
+  onOpenCategories,
+  onSaveTemplate,
+  onLoadTemplate,
+  templates,
+  exporting,
+  theme,
+  onToggleTheme,
+}) {
+  return (
+    <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 shadow-sm transition-colors">
+      <div className="max-w-[1500px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <span className="text-2xl">📅</span>
+          برنامه‌ریز هفتگی
+        </h1>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <ToolbarButton onClick={onOpenCategories} icon="🎨" label="دسته‌ها" />
+          <ToolbarButton onClick={onSaveTemplate} icon="💾" label="ذخیره قالب" />
+
+          {templates.length > 0 && (
+            <select
+              onChange={(e) => {
+                if (e.target.value) onLoadTemplate(e.target.value);
+                e.target.value = "";
+              }}
+              className="px-3 py-1.5 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg cursor-pointer border border-transparent dark:border-slate-700 transition-colors"
+              defaultValue=""
+            >
+              <option value="" disabled>📂 قالب‌ها</option>
+              {templates.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          )}
+
+          <button
+            onClick={onExport}
+            disabled={exporting}
+            className="px-3 py-1.5 text-sm font-semibold text-white bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 rounded-lg shadow-sm hover:shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {exporting ? "⏳ در حال ساخت..." : "📸 خروجی JPG"}
+          </button>
+
+          <button
+            onClick={onToggleTheme}
+            className="w-9 h-9 flex items-center justify-center text-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors border border-transparent dark:border-slate-700"
+            title={theme === "dark" ? "حالت روشن" : "حالت تاریک"}
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
+
+          <button
+            onClick={onClearAll}
+            className="px-3 py-1.5 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors"
+          >
+            🗑 پاک کردن
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function ToolbarButton({ onClick, icon, label }) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-3 py-1.5 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors border border-transparent dark:border-slate-700"
+    >
+      {icon} {label}
+    </button>
+  );
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 constants.js
+──────────────────────────────────────────────────────────────────────
+export const DAYS = [
+  { key: "sat", label: "شنبه" },
+  { key: "sun", label: "یکشنبه" },
+  { key: "mon", label: "دوشنبه" },
+  { key: "tue", label: "سه‌شنبه" },
+  { key: "wed", label: "چهارشنبه" },
+  { key: "thu", label: "پنجشنبه" },
+  { key: "fri", label: "جمعه" },
+];
+
+export const DAY_START_MIN = 7 * 60;    // 07:00
+export const DAY_END_MIN   = 24 * 60;   // 24:00
+export const PX_PER_MINUTE = 1;
+export const COLUMN_HEIGHT =
+  (DAY_END_MIN - DAY_START_MIN) * PX_PER_MINUTE; // 1020
+
+export const DEFAULT_CATEGORIES = [
+  { id: "work",   name: "کار",       color: "#3b82f6" },
+  { id: "study",  name: "مطالعه",    color: "#f59e0b" },
+  { id: "sport",  name: "ورزش",      color: "#10b981" },
+  { id: "family", name: "خانوادگی",  color: "#ec4899" },
+  { id: "rest",   name: "استراحت",   color: "#8b5cf6" },
+  { id: "other",  name: "سایر",      color: "#6b7280" },
+];
+
+export const EMPTY_SCHEDULE = {
+  sat: [], sun: [], mon: [], tue: [], wed: [], thu: [], fri: [],
+};
+
+──────────────────────────────────────────────────────────────────────
+📄 hooks/useDragResize.js
+──────────────────────────────────────────────────────────────────────
+import { useRef, useState, useCallback } from "react";
+import { DAY_START_MIN, DAY_END_MIN, PX_PER_MINUTE } from "../constants";
+
+const SNAP = 5; 
+
+function snap(min) {
+  return Math.round(min / SNAP) * SNAP;
+}
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.task - تسک در حال کشیدن
+ * @param {Function} opts.onChange - callback (patch) => void
+ */
+export function useDragResize({ task, onChange }) {
+  const [dragging, setDragging] = useState(null); // "move" | "top" | "bottom" | null
+  const stateRef = useRef(null);
+
+  const handleMouseDown = useCallback(
+    (mode, e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      stateRef.current = {
+        startY: e.clientY,
+        origStart: task.start,
+        origEnd: task.end,
+      };
+      setDragging(mode);
+
+      document.body.style.cursor =
+        mode === "move" ? "grabbing" : "ns-resize";
+      document.body.style.userSelect = "none";
+
+      const handleMouseMove = (ev) => {
+        const deltaY = ev.clientY - stateRef.current.startY;
+        const deltaMin = snap(deltaY / PX_PER_MINUTE);
+
+        const { origStart, origEnd } = stateRef.current;
+        const duration = origEnd - origStart;
+
+        if (mode === "move") {
+          let newStart = origStart + deltaMin;
+          let newEnd = origEnd + deltaMin;
+
+          if (newStart < DAY_START_MIN) {
+            newStart = DAY_START_MIN;
+            newEnd = newStart + duration;
+          }
+          if (newEnd > DAY_END_MIN) {
+            newEnd = DAY_END_MIN;
+            newStart = newEnd - duration;
+          }
+
+          onChange({ start: newStart, end: newEnd });
+        } else if (mode === "top") {
+          let newStart = origStart + deltaMin;
+          if (newStart < DAY_START_MIN) newStart = DAY_START_MIN;
+          if (newStart > origEnd - 5) newStart = origEnd - 5;
+          onChange({ start: newStart });
+        } else if (mode === "bottom") {
+          let newEnd = origEnd + deltaMin;
+          if (newEnd > DAY_END_MIN) newEnd = DAY_END_MIN;
+          if (newEnd < origStart + 5) newEnd = origStart + 5;
+          onChange({ end: newEnd });
+        }
+      };
+
+      const handleMouseUp = () => {
+        setDragging(null);
+        stateRef.current = null;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    },
+    [task.start, task.end, onChange]
+  );
+
+  return { dragging, handleMouseDown };
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 hooks/useSchedule.js
+──────────────────────────────────────────────────────────────────────
+import { useEffect, useState, useCallback } from "react";
+import { EMPTY_SCHEDULE, DEFAULT_CATEGORIES, DAYS } from "../constants";
+
+const STORAGE_KEY = "weekly-planner-v2";
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function useSchedule() {
+  const [state, setState] = useState(() => {
+    const saved = loadFromStorage();
+    return {
+      schedule: saved?.schedule ?? EMPTY_SCHEDULE,
+      categories: saved?.categories ?? DEFAULT_CATEGORIES,
+    };
+  });
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [state]);
+
+  const addTask = useCallback((dayKey, task) => {
+    setState((prev) => ({
+      ...prev,
+      schedule: {
+        ...prev.schedule,
+        [dayKey]: [...prev.schedule[dayKey], task].sort(
+          (a, b) => a.start - b.start
+        ),
+      },
+    }));
+  }, []);
+
+  const updateTask = useCallback((dayKey, taskId, patch) => {
+    setState((prev) => ({
+      ...prev,
+      schedule: {
+        ...prev.schedule,
+        [dayKey]: prev.schedule[dayKey]
+          .map((t) => (t.id === taskId ? { ...t, ...patch } : t))
+          .sort((a, b) => a.start - b.start),
+      },
+    }));
+  }, []);
+
+  const removeTask = useCallback((dayKey, taskId) => {
+    setState((prev) => ({
+      ...prev,
+      schedule: {
+        ...prev.schedule,
+        [dayKey]: prev.schedule[dayKey].filter((t) => t.id !== taskId),
+      },
+    }));
+  }, []);
+
+  const clearAll = useCallback(() => {
+    if (confirm("مطمئنی می‌خوای همه‌ی برنامه‌ها پاک بشن؟")) {
+      setState((prev) => ({ ...prev, schedule: EMPTY_SCHEDULE }));
+    }
+  }, []);
+
+  const saveAsTemplate = useCallback(() => {
+    const name = prompt("اسم قالب (مثلاً «هفته‌ی معمولی»):");
+    if (!name) return;
+    const templates = JSON.parse(
+      localStorage.getItem("weekly-planner-templates") || "{}"
+    );
+    templates[name] = state.schedule;
+    localStorage.setItem(
+      "weekly-planner-templates",
+      JSON.stringify(templates)
+    );
+    alert(`قالب «${name}» ذخیره شد ✅`);
+  }, [state.schedule]);
+
+  const loadTemplate = useCallback((name) => {
+    const templates = JSON.parse(
+      localStorage.getItem("weekly-planner-templates") || "{}"
+    );
+    if (!templates[name]) return;
+    if (!confirm(`برنامه‌ی فعلی با قالب «${name}» جایگزین بشه؟`)) return;
+    setState((prev) => ({ ...prev, schedule: templates[name] }));
+  }, []);
+
+  const getTemplates = useCallback(() => {
+    return Object.keys(
+      JSON.parse(localStorage.getItem("weekly-planner-templates") || "{}")
+    );
+  }, []);
+
+  const addCategory = useCallback((category) => {
+    setState((prev) => ({
+      ...prev,
+      categories: [...prev.categories, category],
+    }));
+  }, []);
+
+  const updateCategory = useCallback((id, patch) => {
+    setState((prev) => ({
+      ...prev,
+      categories: prev.categories.map((c) =>
+        c.id === id ? { ...c, ...patch } : c
+      ),
+    }));
+  }, []);
+
+  const removeCategory = useCallback((id) => {
+    setState((prev) => {
+      const inUse = DAYS.some((d) =>
+        prev.schedule[d.key].some((t) => t.categoryId === id)
+      );
+      if (inUse) {
+        alert("این دسته در حال استفاده‌ست. اول تسک‌هاش رو تغییر بده.");
+        return prev;
+      }
+      return {
+        ...prev,
+        categories: prev.categories.filter((c) => c.id !== id),
+      };
+    });
+  }, []);
+
+  const liveUpdateTask = useCallback((dayKey, taskId, patch) => {
+  setState((prev) => ({
+    ...prev,
+    schedule: {
+      ...prev.schedule,
+      [dayKey]: prev.schedule[dayKey].map((t) =>
+        t.id === taskId ? { ...t, ...patch } : t
+      ),
+    },
+  }));
+}, []);
+
+  return {
+    schedule: state.schedule,
+    categories: state.categories,
+    addTask,
+    updateTask,
+    removeTask,
+    clearAll,
+    addCategory,
+    updateCategory,
+    removeCategory,
+    saveAsTemplate,
+    loadTemplate,
+    getTemplates,
+    liveUpdateTask,
+  };
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 hooks/useTheme.js
+──────────────────────────────────────────────────────────────────────
+import { useEffect, useState } from "react";
+
+const STORAGE_KEY = "weekly-planner-theme";
+
+export function useTheme() {
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem(STORAGE_KEY) || "light";
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+    localStorage.setItem(STORAGE_KEY, theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
+
+  return { theme, toggleTheme };
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 index.css
+──────────────────────────────────────────────────────────────────────
+@import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+* {
+  font-family: 'Vazirmatn', sans-serif;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f1f5f9;
+  color: #0f172a;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.dark body {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 5px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+.task-block {
+  transition: box-shadow 0.15s ease, transform 0.15s ease, filter 0.15s ease;
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 main.jsx
+──────────────────────────────────────────────────────────────────────
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import "./index.css";
+import App from "./App.jsx";
+
+createRoot(document.getElementById("root")).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+
+──────────────────────────────────────────────────────────────────────
+📄 utils/exportImage.js
+──────────────────────────────────────────────────────────────────────
+import html2canvas from "html2canvas";
+
+export async function exportToJPG(element, filename = "weekly-planner.jpg") {
+  const stickyEls = element.querySelectorAll(".sticky");
+  stickyEls.forEach((el) => {
+    el.dataset.oldPosition = el.style.position;
+    el.style.position = "static";
+  });
+
+  try {
+    const canvas = await html2canvas(element, {
+      backgroundColor: "#ffffff",
+      scale: 2,        
+      useCORS: true,
+      logging: false,
+    });
+
+    const link = document.createElement("a");
+    link.download = filename;
+    link.href = canvas.toDataURL("image/jpeg", 0.95);
+    link.click();
+  } finally {
+    stickyEls.forEach((el) => {
+      el.style.position = el.dataset.oldPosition || "";
+      delete el.dataset.oldPosition;
+    });
+  }
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 utils/overlap.js
+──────────────────────────────────────────────────────────────────────
+export function findOverlap(tasks, start, end, excludeId = null) {
+  return tasks.find((t) => {
+    if (t.id === excludeId) return false;
+    return start < t.end && end > t.start;
+  });
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 utils/time.js
+──────────────────────────────────────────────────────────────────────
+import { DAY_START_MIN, DAY_END_MIN } from "../constants";
+
+export function minutesToHHMM(min) {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+export function hhmmToMinutes(str) {
+  const [h, m] = str.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// لیست مارک‌های ساعت (هر 30 دقیقه)
+export function buildHourMarks(stepMinutes = 30) {
+  const marks = [];
+  for (let m = DAY_START_MIN; m <= DAY_END_MIN; m += stepMinutes) {
+    marks.push(m);
+  }
+  return marks;
+}
+
+// مدت به فرمت خوانا: "1 ساعت و 35 دقیقه"
+export function formatDuration(minutes) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} دقیقه`;
+  if (m === 0) return `${h} ساعت`;
+  return `${h} ساعت و ${m} دقیقه`;
+}
+
+======================================================================
+✅ پایان

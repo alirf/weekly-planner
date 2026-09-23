@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { DAYS } from "./constants";
 import { useSchedule } from "./hooks/useSchedule";
+import { useTheme } from "./hooks/useTheme";
 import { exportToJPG } from "./utils/exportImage";
-import { useCallback } from "react";
 import DayColumn from "./components/DayColumn";
 import TimeRuler from "./components/TimeRuler";
 import TaskEditor from "./components/TaskEditor";
@@ -36,6 +36,7 @@ export default function App() {
   const [templates, setTemplates] = useState(() => getTemplates());
 
   const gridRef = useRef(null);
+  const { theme, toggleTheme } = useTheme();
 
   const openAdd = (dayKey) =>
     setEditor({ open: true, dayKey, task: null });
@@ -82,32 +83,11 @@ export default function App() {
     loadTemplate(name);
   };
 
-  const handleLiveChange = useCallback(
-  (dayKey, taskId, patch) => {
-    liveUpdateTask(dayKey, taskId, patch);
-  },
-  [liveUpdateTask]
-  );
-
-  const handleCommitChange = useCallback(
-  (dayKey, taskId) => {
-    // مرتب‌سازی نهایی
-    const task = schedule[dayKey].find((t) => t.id === taskId);
-    if (task) {
-      updateTask(dayKey, taskId, {
-        start: task.start,
-        end: task.end,
-      });
-    }
-  },
-  [schedule, updateTask]
-);
-
   const dayLabel =
     DAYS.find((d) => d.key === editor.dayKey)?.label ?? "";
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
       <Toolbar
         onExport={handleExport}
         onClearAll={clearAll}
@@ -116,12 +96,14 @@ export default function App() {
         onLoadTemplate={handleLoadTemplate}
         templates={templates}
         exporting={exporting}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       <main className="max-w-[1500px] mx-auto p-4">
         <div
           ref={gridRef}
-          className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
+          className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors"
         >
           <div className="flex">
             <TimeRuler />
@@ -133,15 +115,16 @@ export default function App() {
                 categories={categories}
                 onAdd={openAdd}
                 onEditTask={openEdit}
-                onLiveChange={(taskId, patch) => handleLiveChange(day.key, taskId, patch)}
-                onCommitChange={(taskId) => handleCommitChange(day.key, taskId)}
+                onLiveChange={(taskId, patch) =>
+                  liveUpdateTask(day.key, taskId, patch)
+                }
               />
             ))}
           </div>
         </div>
 
-        <p className="text-xs text-slate-400 mt-3 text-center">
-          💡 روی فضای خالی ستون یا دکمه‌ی «+ افزودن» کلیک کن. برای ویرایش، روی خود تسک بزن.
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-3 text-center">
+          💡 روی فضای خالی ستون یا دکمه‌ی «+ افزودن» کلیک کن. برای ویرایش، روی تسک بزن.
         </p>
       </main>
 

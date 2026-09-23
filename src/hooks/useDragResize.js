@@ -1,30 +1,27 @@
 import { useRef, useState, useCallback } from "react";
 import { DAY_START_MIN, DAY_END_MIN, PX_PER_MINUTE } from "../constants";
 
-const SNAP = 5; 
+const SNAP = 5;
 
 function snap(min) {
   return Math.round(min / SNAP) * SNAP;
 }
 
-/**
- * @param {Object} opts
- * @param {Object} opts.task - تسک در حال کشیدن
- * @param {Function} opts.onChange - callback (patch) => void
- */
-export function useDragResize({ task, onChange }) {
-  const [dragging, setDragging] = useState(null); // "move" | "top" | "bottom" | null
+export function useDragResize({ task, onLiveChange }) {
+  const [dragging, setDragging] = useState(null);
   const stateRef = useRef(null);
 
   const handleMouseDown = useCallback(
     (mode, e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (e.button !== 0) return;
 
       stateRef.current = {
         startY: e.clientY,
         origStart: task.start,
         origEnd: task.end,
+        moved: false,
       };
       setDragging(mode);
 
@@ -33,9 +30,13 @@ export function useDragResize({ task, onChange }) {
       document.body.style.userSelect = "none";
 
       const handleMouseMove = (ev) => {
+        if (!stateRef.current) return;
         const deltaY = ev.clientY - stateRef.current.startY;
-        const deltaMin = snap(deltaY / PX_PER_MINUTE);
 
+        if (!stateRef.current.moved && Math.abs(deltaY) < 3) return;
+        stateRef.current.moved = true;
+
+        const deltaMin = snap(deltaY / PX_PER_MINUTE);
         const { origStart, origEnd } = stateRef.current;
         const duration = origEnd - origStart;
 
@@ -51,18 +52,17 @@ export function useDragResize({ task, onChange }) {
             newEnd = DAY_END_MIN;
             newStart = newEnd - duration;
           }
-
-          onChange({ start: newStart, end: newEnd });
+          onLiveChange({ start: newStart, end: newEnd });
         } else if (mode === "top") {
           let newStart = origStart + deltaMin;
           if (newStart < DAY_START_MIN) newStart = DAY_START_MIN;
           if (newStart > origEnd - 5) newStart = origEnd - 5;
-          onChange({ start: newStart });
+          onLiveChange({ start: newStart });
         } else if (mode === "bottom") {
           let newEnd = origEnd + deltaMin;
           if (newEnd > DAY_END_MIN) newEnd = DAY_END_MIN;
           if (newEnd < origStart + 5) newEnd = origStart + 5;
-          onChange({ end: newEnd });
+          onLiveChange({ end: newEnd });
         }
       };
 
@@ -78,8 +78,10 @@ export function useDragResize({ task, onChange }) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
     },
-    [task.start, task.end, onChange]
+    [task.start, task.end, onLiveChange]
   );
 
-  return { dragging, handleMouseDown };
+  const wasDragged = () => stateRef.current?.moved ?? false;
+
+  return { dragging, handleMouseDown, wasDragged };
 }

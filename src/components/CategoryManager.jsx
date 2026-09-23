@@ -28,14 +28,14 @@ export default function CategoryManager({
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-5 max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg p-5 max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700 transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold mb-4 text-slate-800">
+        <h2 className="text-lg font-bold mb-4 text-slate-800 dark:text-slate-100">
           🎨 مدیریت دسته‌ها
         </h2>
 
@@ -44,52 +44,61 @@ export default function CategoryManager({
           {categories.map((cat) => (
             <div
               key={cat.id}
-              className="flex items-center gap-3 p-2 border border-slate-200 rounded-md"
+              className="flex items-center gap-3 p-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
             >
               <input
                 type="color"
                 value={cat.color}
                 onChange={(e) => onUpdate(cat.id, { color: e.target.value })}
-                className="w-8 h-8 rounded cursor-pointer border-none"
+                className="w-9 h-9 rounded-lg cursor-pointer border-none bg-transparent"
+                style={{ padding: 0 }}
               />
               <input
                 value={cat.name}
                 onChange={(e) => onUpdate(cat.id, { name: e.target.value })}
-                className="flex-1 border border-slate-200 rounded px-2 py-1 text-sm"
+                className="flex-1 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-colors"
               />
               <button
                 onClick={() => onRemove(cat.id)}
-                className="text-red-500 hover:bg-red-50 px-2 py-1 rounded text-sm"
+                className="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 w-8 h-8 rounded-lg text-sm flex items-center justify-center transition-colors"
                 title="حذف"
               >
                 ✕
               </button>
             </div>
           ))}
+
+          {categories.length === 0 && (
+            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-4">
+              هنوز دسته‌ای نداری
+            </p>
+          )}
         </div>
 
         {/* افزودن دسته جدید */}
-        <div className="border-t border-slate-200 pt-4">
-          <h3 className="text-sm font-bold text-slate-700 mb-2">
+        <div className="border-t border-slate-200 dark:border-slate-700 pt-4 transition-colors">
+          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">
             ➕ افزودن دسته‌ی جدید
           </h3>
+
           <div className="flex items-center gap-2">
             <input
               type="color"
               value={newColor}
               onChange={(e) => setNewColor(e.target.value)}
-              className="w-10 h-10 rounded cursor-pointer border-none"
+              className="w-10 h-10 rounded-lg cursor-pointer border-none bg-transparent shrink-0"
+              style={{ padding: 0 }}
             />
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAdd()}
               placeholder="نام دسته"
-              className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="flex-1 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-colors"
             />
             <button
               onClick={handleAdd}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-blue-700"
+              className="bg-gradient-to-br from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg transition-all shrink-0"
             >
               افزودن
             </button>
@@ -101,20 +110,28 @@ export default function CategoryManager({
               <button
                 key={c}
                 onClick={() => setNewColor(c)}
-                className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
+                className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 shadow-sm"
                 style={{
                   background: c,
-                  borderColor: newColor === c ? "#0f172a" : "transparent",
+                  borderColor:
+                    newColor === c
+                      ? "#0f172a"
+                      : "rgba(0,0,0,0.05)",
+                  boxShadow:
+                    newColor === c
+                      ? "0 0 0 2px white, 0 0 0 4px " + c
+                      : "none",
                 }}
+                title={c}
               />
             ))}
           </div>
         </div>
 
-        <div className="flex justify-end mt-5 pt-4 border-t border-slate-100">
+        <div className="flex justify-end mt-5 pt-4 border-t border-slate-100 dark:border-slate-700 transition-colors">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-md text-sm font-semibold bg-slate-100 hover:bg-slate-200"
+            className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
           >
             بستن
           </button>

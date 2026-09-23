@@ -5,8 +5,8 @@ const marks = buildHourMarks(30);
 
 export default function TimeRuler() {
   return (
-    <div className="w-16 shrink-0 relative bg-slate-50 border-l border-slate-200">
-      <div className="h-10 bg-slate-100 border-b border-slate-200 flex items-center justify-center text-xs text-slate-500 font-bold">
+    <div className="w-16 shrink-0 relative bg-slate-50 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 transition-colors">
+      <div className="h-10 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-center text-xs text-slate-500 dark:text-slate-400 font-bold transition-colors">
         ساعت
       </div>
 
@@ -21,11 +21,11 @@ export default function TimeRuler() {
               style={{ top: `${top}px`, transform: "translateY(-6px)" }}
             >
               {isHour ? (
-                <span className="text-[11px] font-semibold text-slate-600 tabular-nums pr-2 leading-none">
+                <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 tabular-nums pr-2 leading-none">
                   {minutesToHHMM(min)}
                 </span>
               ) : (
-                <span className="text-[9px] text-slate-300 pr-2 leading-none">
+                <span className="text-[9px] text-slate-300 dark:text-slate-600 pr-2 leading-none">
                   {minutesToHHMM(min)}
                 </span>
               )}

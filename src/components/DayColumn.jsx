@@ -2,33 +2,35 @@ import { COLUMN_HEIGHT } from "../constants";
 import TaskBlock from "./TaskBlock";
 
 export default function DayColumn({
-  day,
-  tasks,
-  categories,
-  onAdd,
-  onEditTask,
-  onLiveChange,
-  onCommitChange,
+  day, tasks, categories, onAdd, onEditTask, onLiveChange,
 }) {
-  const handleEmptyClick = (e) => {
-    if (e.target === e.currentTarget) onAdd(day.key);
-  };
+  const isToday =
+    new Date().toLocaleDateString("fa-IR", { weekday: "long" }) === day.label;
 
   return (
-    <div className="flex-1 min-w-[130px] border-l border-slate-200 relative">
-      <div className="sticky top-0 z-10 h-10 bg-slate-100 border-b border-slate-200 flex items-center justify-center font-bold text-slate-700 text-sm">
+    <div className="flex-1 min-w-[130px] border-l border-slate-200 dark:border-slate-700 relative transition-colors">
+      <div
+        className={`sticky top-0 z-10 h-10 border-b flex items-center justify-center font-bold text-sm transition-colors ${
+          isToday
+            ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
+        }`}
+      >
         {day.label}
+        {isToday && (
+          <span className="mr-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+        )}
       </div>
 
       <div
-        onClick={handleEmptyClick}
-        className="relative cursor-pointer hover:bg-slate-50/50 transition-colors"
+        onClick={(e) => e.target === e.currentTarget && onAdd(day.key)}
+        className="relative cursor-pointer hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
         style={{ height: `${COLUMN_HEIGHT}px` }}
       >
         {Array.from({ length: 18 }).map((_, i) => (
           <div
             key={i}
-            className="absolute right-0 left-0 border-t border-slate-100 pointer-events-none"
+            className="absolute right-0 left-0 border-t border-slate-100 dark:border-slate-800 pointer-events-none"
             style={{ top: `${i * 60}px` }}
           />
         ))}
@@ -38,12 +40,8 @@ export default function DayColumn({
             key={task.id}
             task={task}
             category={categories.find((c) => c.id === task.categoryId)}
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditTask(day.key, task);
-            }}
+            onClick={() => onEditTask(day.key, task)}
             onLiveChange={onLiveChange}
-            onCommitChange={onCommitChange}
           />
         ))}
 
@@ -52,7 +50,7 @@ export default function DayColumn({
             e.stopPropagation();
             onAdd(day.key);
           }}
-          className="absolute bottom-2 right-1/2 translate-x-1/2 bg-white border border-dashed border-slate-300 text-slate-500 rounded-md text-xs px-3 py-1 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-colors shadow-sm z-10"
+          className="absolute bottom-2 right-1/2 translate-x-1/2 bg-white dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 rounded-lg text-xs px-3 py-1 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-400 dark:hover:border-blue-500 transition-colors shadow-sm z-10"
         >
           + افزودن
         </button>
