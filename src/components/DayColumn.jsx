@@ -7,26 +7,24 @@ export default function DayColumn({
   categories,
   onAdd,
   onEditTask,
+  onLiveChange,
+  onCommitChange,
 }) {
   const handleEmptyClick = (e) => {
-    // فقط وقتی روی خود بدنه کلیک شد (نه روی تسک یا دکمه)
     if (e.target === e.currentTarget) onAdd(day.key);
   };
 
   return (
     <div className="flex-1 min-w-[130px] border-l border-slate-200 relative">
-      {/* هدر روز */}
       <div className="sticky top-0 z-10 h-10 bg-slate-100 border-b border-slate-200 flex items-center justify-center font-bold text-slate-700 text-sm">
         {day.label}
       </div>
 
-      {/* بدنه ستون */}
       <div
         onClick={handleEmptyClick}
         className="relative cursor-pointer hover:bg-slate-50/50 transition-colors"
         style={{ height: `${COLUMN_HEIGHT}px` }}
       >
-        {/* خطوط راهنمای ساعتی */}
         {Array.from({ length: 18 }).map((_, i) => (
           <div
             key={i}
@@ -35,7 +33,6 @@ export default function DayColumn({
           />
         ))}
 
-        {/* تسک‌ها */}
         {tasks.map((task) => (
           <TaskBlock
             key={task.id}
@@ -45,10 +42,11 @@ export default function DayColumn({
               e.stopPropagation();
               onEditTask(day.key, task);
             }}
+            onLiveChange={onLiveChange}
+            onCommitChange={onCommitChange}
           />
         ))}
 
-        {/* دکمه افزودن شناور پایین */}
         <button
           onClick={(e) => {
             e.stopPropagation();

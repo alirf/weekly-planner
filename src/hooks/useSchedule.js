@@ -95,7 +95,6 @@ export function useSchedule() {
     );
   }, []);
 
-  // دسته‌ها
   const addCategory = useCallback((category) => {
     setState((prev) => ({
       ...prev,
@@ -128,6 +127,18 @@ export function useSchedule() {
     });
   }, []);
 
+  const liveUpdateTask = useCallback((dayKey, taskId, patch) => {
+  setState((prev) => ({
+    ...prev,
+    schedule: {
+      ...prev.schedule,
+      [dayKey]: prev.schedule[dayKey].map((t) =>
+        t.id === taskId ? { ...t, ...patch } : t
+      ),
+    },
+  }));
+}, []);
+
   return {
     schedule: state.schedule,
     categories: state.categories,
@@ -141,5 +152,6 @@ export function useSchedule() {
     saveAsTemplate,
     loadTemplate,
     getTemplates,
+    liveUpdateTask,
   };
 }

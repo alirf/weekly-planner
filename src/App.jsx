@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { DAYS } from "./constants";
 import { useSchedule } from "./hooks/useSchedule";
 import { exportToJPG } from "./utils/exportImage";
+import { useCallback } from "react";
 import DayColumn from "./components/DayColumn";
 import TimeRuler from "./components/TimeRuler";
 import TaskEditor from "./components/TaskEditor";
@@ -22,6 +23,7 @@ export default function App() {
     saveAsTemplate,
     loadTemplate,
     getTemplates,
+    liveUpdateTask,
   } = useSchedule();
 
   const [editor, setEditor] = useState({
@@ -80,6 +82,27 @@ export default function App() {
     loadTemplate(name);
   };
 
+  const handleLiveChange = useCallback(
+  (dayKey, taskId, patch) => {
+    liveUpdateTask(dayKey, taskId, patch);
+  },
+  [liveUpdateTask]
+  );
+
+  const handleCommitChange = useCallback(
+  (dayKey, taskId) => {
+    // مرتب‌سازی نهایی
+    const task = schedule[dayKey].find((t) => t.id === taskId);
+    if (task) {
+      updateTask(dayKey, taskId, {
+        start: task.start,
+        end: task.end,
+      });
+    }
+  },
+  [schedule, updateTask]
+);
+
   const dayLabel =
     DAYS.find((d) => d.key === editor.dayKey)?.label ?? "";
 
@@ -110,6 +133,8 @@ export default function App() {
                 categories={categories}
                 onAdd={openAdd}
                 onEditTask={openEdit}
+                onLiveChange={(taskId, patch) => handleLiveChange(day.key, taskId, patch)}
+                onCommitChange={(taskId) => handleCommitChange(day.key, taskId)}
               />
             ))}
           </div>
