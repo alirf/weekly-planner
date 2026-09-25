@@ -14,6 +14,7 @@ import TimeRuler from "./components/TimeRuler";
 import TaskEditor from "./components/TaskEditor";
 import CategoryManager from "./components/CategoryManager";
 import Toolbar from "./components/Toolbar";
+import TaskContextMenu from "./components/TaskContextMenu";
 
 const SNAP = 5;
 const MIN_DURATION = 5;
@@ -49,6 +50,8 @@ export default function App() {
     getTemplates,
     liveUpdateTask,
     moveTaskToDay,
+    duplicateTask,
+    copyTaskToDay,
   } = useSchedule();
 
   const [editor, setEditor] = useState({
@@ -68,6 +71,8 @@ export default function App() {
 
   const { theme, toggleTheme } = useTheme();
   const now = useNow();
+
+  const [contextMenu, setContextMenu] = useState(null);
 
   // ─── Editor handlers ─────────────────────────────────────
   const openAdd = useCallback((dayKey) => {
@@ -97,6 +102,10 @@ export default function App() {
       closeEditor();
     }
   };
+
+  const handleTaskContextMenu = useCallback((clientX, clientY, dayKey, taskId) => {
+  setContextMenu({ x: clientX, y: clientY, dayKey, taskId });
+}, []);
 
   // ─── Export ──────────────────────────────────────────────
   const handleExport = async () => {
@@ -168,7 +177,6 @@ export default function App() {
         const targetKey = overKey || st.dayKey;
 
         if (targetKey !== st.dayKey) {
-          // جابه‌جایی به روز جدید
           moveTaskToDay(st.dayKey, targetKey, st.taskId, {
             start: newStart,
             end: newEnd,
@@ -178,7 +186,6 @@ export default function App() {
           st.origEnd = newEnd;
           st.startY = ev.clientY;
         } else {
-          // همان روز → فقط زمان
           liveUpdateTask(st.dayKey, st.taskId, {
             start: newStart,
             end: newEnd,
@@ -262,6 +269,7 @@ export default function App() {
                 onStartDrag={handleStartDrag}
                 draggingTaskId={draggingTaskId}
                 now={now}
+                onTaskContextMenu={handleTaskContextMenu}
               />
             ))}
           </div>
@@ -292,6 +300,34 @@ export default function App() {
         onRemove={removeCategory}
         onClose={() => setShowCategories(false)}
       />
+
+      {contextMenu && (() => {
+        const task = schedule[contextMenu.dayKey]?.find(
+          (t) => t.id === contextMenu.taskId
+        );
+        if (!task) return null;
+        return (
+          <TaskContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            dayKey={contextMenu.dayKey}
+            onClose={() => setContextMenu(null)}
+            onEdit={() => openEdit(contextMenu.dayKey, task)}
+            onDuplicate={() =>
+              duplicateTask(contextMenu.dayKey, contextMenu.taskId)
+            }
+            onCopyToDay={(targetKey) =>
+              copyTaskToDay(contextMenu.dayKey, targetKey, contextMenu.taskId)
+            }
+            onMoveToDay={(targetKey) =>
+              moveTaskToDay(contextMenu.dayKey, targetKey, contextMenu.taskId, {}, { smart: true })
+            }
+            onDelete={() =>
+              removeTask(contextMenu.dayKey, contextMenu.taskId)
+            }
+          />
+        );
+      })()}
     </div>
   );
 }

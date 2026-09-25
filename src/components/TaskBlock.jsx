@@ -7,6 +7,7 @@ export default function TaskBlock({
   category,
   isDragging,
   onStartDrag,
+  onContextMenu,
 }) {
   const top = (task.start - DAY_START_MIN) * PX_PER_MINUTE;
   const duration = task.end - task.start;
@@ -44,6 +45,11 @@ export default function TaskBlock({
         height: `${height}px`,
         background: `linear-gradient(135deg, ${bg} 0%, ${shadeColor(bg, -15)} 100%)`,
         borderRight: `4px solid ${shadeColor(bg, -30)}`,
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu(e.clientX, e.clientY, task.id);
       }}
     >
       <div className="relative px-2.5 py-1.5 h-full flex flex-col text-white z-10 pointer-events-none">

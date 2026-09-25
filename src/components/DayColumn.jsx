@@ -12,6 +12,7 @@ export default function DayColumn({
   onStartDrag,
   draggingTaskId,
   now,
+  onTaskContextMenu,
 }) {
   const today = isToday(day.key);
 
@@ -56,6 +57,9 @@ export default function DayColumn({
             category={categories.find((c) => c.id === task.categoryId)}
             isDragging={draggingTaskId === task.id}
             onStartDrag={onStartDrag}
+            onContextMenu={(x, y, taskId) =>
+              onTaskContextMenu(x, y, day.key, taskId)
+            }
           />
         ))}
 

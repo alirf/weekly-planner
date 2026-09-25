@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { EMPTY_SCHEDULE, DEFAULT_CATEGORIES, DAYS } from "../constants";
+import { findFreeSlot } from "../utils/findFreeSlot";
 
 const STORAGE_KEY = "weekly-planner-v2";
 
@@ -11,6 +12,19 @@ function loadFromStorage() {
   } catch {
     return null;
   }
+}
+
+function dayLabelOf(key) {
+  const map = {
+    sat: "شنبه",
+    sun: "یکشنبه",
+    mon: "دوشنبه",
+    tue: "سه‌شنبه",
+    wed: "چهارشنبه",
+    thu: "پنجشنبه",
+    fri: "جمعه",
+  };
+  return map[key] || key;
 }
 
 export function useSchedule() {
@@ -138,38 +152,154 @@ export function useSchedule() {
     },
   }));
 }, []);
-  const moveTaskToDay = useCallback((oldDayKey, newDayKey, taskId, patch = {}) => {
-  setState((prev) => {
+  const moveTaskToDay = useCallback(
+  (oldDayKey, newDayKey, taskId, patch = {}, opts = {}) => {
+    const { smart = false } = opts;
+
     if (oldDayKey === newDayKey) {
+      setState((prev) => ({
+        ...prev,
+        schedule: {
+          ...prev.schedule,
+          [oldDayKey]: prev.schedule[oldDayKey]
+            .map((t) => (t.id === taskId ? { ...t, ...patch } : t))
+            .sort((a, b) => a.start - b.start),
+        },
+      }));
+      return;
+    }
+
+    let error = null;
+
+    setState((prev) => {
+      const task = prev.schedule[oldDayKey]?.find((t) => t.id === taskId);
+      if (!task) return prev;
+
+      const targetTasks = prev.schedule[newDayKey] || [];
+
+      let finalStart = patch.start ?? task.start;
+      let finalEnd = patch.end ?? task.end;
+
+      if (smart) {
+        const duration = finalEnd - finalStart;
+        const slot = findFreeSlot(targetTasks, duration, {
+          preferStart: finalStart,
+        });
+
+        if (!slot) {
+          error = `توی «${dayLabelOf(newDayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
+          return prev;
+        }
+        finalStart = slot.start;
+        finalEnd = slot.end;
+      }
+
+      const updatedTask = {
+        ...task,
+        ...patch,
+        start: finalStart,
+        end: finalEnd,
+      };
+
       return {
         ...prev,
         schedule: {
           ...prev.schedule,
-          [oldDayKey]: prev.schedule[oldDayKey].map((t) =>
-            t.id === taskId ? { ...t, ...patch } : t
+          [oldDayKey]: prev.schedule[oldDayKey].filter(
+            (t) => t.id !== taskId
+          ),
+          [newDayKey]: [...targetTasks, updatedTask].sort(
+            (a, b) => a.start - b.start
           ),
         },
       };
-    }
+    });
 
-    const oldTasks = prev.schedule[oldDayKey] || [];
-    const task = oldTasks.find((t) => t.id === taskId);
+    if (error) alert("⚠️ " + error);
+  },
+  []
+);
+
+const duplicateTask = useCallback((dayKey, taskId) => {
+  let error = null;
+
+  setState((prev) => {
+    const dayTasks = prev.schedule[dayKey] || [];
+    const task = dayTasks.find((t) => t.id === taskId);
     if (!task) return prev;
 
-    const updatedTask = { ...task, ...patch };
-    const newOldTasks = oldTasks.filter((t) => t.id !== taskId);
-    const newDayTasks = [...(prev.schedule[newDayKey] || []), updatedTask]
-      .sort((a, b) => a.start - b.start);
+    const duration = task.end - task.start;
+
+    const slot = findFreeSlot(dayTasks, duration, {
+      preferStart: task.start,
+      excludeId: taskId,
+    });
+
+    if (!slot) {
+      error = `توی «${dayLabelOf(dayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
+      return prev;
+    }
+
+    const newTask = {
+      ...task,
+      id: crypto.randomUUID(),
+      start: slot.start,
+      end: slot.end,
+      title: task.title + " (کپی)",
+    };
 
     return {
       ...prev,
       schedule: {
         ...prev.schedule,
-        [oldDayKey]: newOldTasks,
-        [newDayKey]: newDayTasks,
+        [dayKey]: [...dayTasks, newTask].sort((a, b) => a.start - b.start),
       },
     };
   });
+
+  if (error) alert("⚠️ " + error);
+}, []);
+
+const copyTaskToDay = useCallback((fromDayKey, toDayKey, taskId) => {
+  if (fromDayKey === toDayKey) {
+    return;
+  }
+
+  let error = null;
+
+  setState((prev) => {
+    const task = prev.schedule[fromDayKey]?.find((t) => t.id === taskId);
+    if (!task) return prev;
+
+    const duration = task.end - task.start;
+    const targetTasks = prev.schedule[toDayKey] || [];
+
+    const slot = findFreeSlot(targetTasks, duration, {
+      preferStart: task.start,
+    });
+
+    if (!slot) {
+      error = `توی «${dayLabelOf(toDayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
+      return prev;
+    }
+
+    const newTask = {
+      ...task,
+      id: crypto.randomUUID(),
+      start: slot.start,
+      end: slot.end,
+    };
+
+    return {
+      ...prev,
+      schedule: {
+        ...prev.schedule,
+        [toDayKey]: [...targetTasks, newTask].sort((a, b) => a.start - b.start),
+      },
+    };
+  });
+
+  if (error) alert("⚠️ " + error);
 }, []);
 
   return {
@@ -187,5 +317,7 @@ export function useSchedule() {
     getTemplates,
     liveUpdateTask,
     moveTaskToDay,
+    copyTaskToDay,
+    duplicateTask,
   };
 }
