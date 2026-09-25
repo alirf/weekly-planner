@@ -1,23 +1,34 @@
 import { COLUMN_HEIGHT } from "../constants";
+import { isToday } from "../utils/time";
 import TaskBlock from "./TaskBlock";
+import NowLine from "./NowLine";
 
 export default function DayColumn({
-  day, tasks, categories, onAdd, onEditTask, onLiveChange,
+  day,
+  tasks,
+  categories,
+  onAdd,
+  onEditTask,
+  onStartDrag,
+  draggingTaskId,
+  now,
 }) {
-  const isToday =
-    new Date().toLocaleDateString("fa-IR", { weekday: "long" }) === day.label;
+  const today = isToday(day.key);
 
   return (
-    <div className="flex-1 min-w-[130px] border-l border-slate-200 dark:border-slate-700 relative transition-colors">
+    <div
+      data-day-key={day.key}
+      className="flex-1 min-w-[130px] border-l border-slate-200 dark:border-slate-700 relative transition-colors"
+    >
       <div
         className={`sticky top-0 z-10 h-10 border-b flex items-center justify-center font-bold text-sm transition-colors ${
-          isToday
+          today
             ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
             : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
         }`}
       >
         {day.label}
-        {isToday && (
+        {today && (
           <span className="mr-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
         )}
       </div>
@@ -35,13 +46,16 @@ export default function DayColumn({
           />
         ))}
 
+        {today && now && <NowLine now={now} />}
+
         {tasks.map((task) => (
           <TaskBlock
             key={task.id}
             task={task}
+            dayKey={day.key}
             category={categories.find((c) => c.id === task.categoryId)}
-            onClick={() => onEditTask(day.key, task)}
-            onLiveChange={onLiveChange}
+            isDragging={draggingTaskId === task.id}
+            onStartDrag={onStartDrag}
           />
         ))}
 

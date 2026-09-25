@@ -138,6 +138,39 @@ export function useSchedule() {
     },
   }));
 }, []);
+  const moveTaskToDay = useCallback((oldDayKey, newDayKey, taskId, patch = {}) => {
+  setState((prev) => {
+    if (oldDayKey === newDayKey) {
+      return {
+        ...prev,
+        schedule: {
+          ...prev.schedule,
+          [oldDayKey]: prev.schedule[oldDayKey].map((t) =>
+            t.id === taskId ? { ...t, ...patch } : t
+          ),
+        },
+      };
+    }
+
+    const oldTasks = prev.schedule[oldDayKey] || [];
+    const task = oldTasks.find((t) => t.id === taskId);
+    if (!task) return prev;
+
+    const updatedTask = { ...task, ...patch };
+    const newOldTasks = oldTasks.filter((t) => t.id !== taskId);
+    const newDayTasks = [...(prev.schedule[newDayKey] || []), updatedTask]
+      .sort((a, b) => a.start - b.start);
+
+    return {
+      ...prev,
+      schedule: {
+        ...prev.schedule,
+        [oldDayKey]: newOldTasks,
+        [newDayKey]: newDayTasks,
+      },
+    };
+  });
+}, []);
 
   return {
     schedule: state.schedule,
@@ -153,5 +186,6 @@ export function useSchedule() {
     loadTemplate,
     getTemplates,
     liveUpdateTask,
+    moveTaskToDay,
   };
 }

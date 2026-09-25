@@ -1,13 +1,37 @@
-import { useRef, useState } from "react";
-import { DAYS } from "./constants";
+import { useRef, useState, useEffect, useCallback } from "react";
+import {
+  DAYS,
+  DAY_START_MIN,
+  DAY_END_MIN,
+  PX_PER_MINUTE,
+} from "./constants";
 import { useSchedule } from "./hooks/useSchedule";
 import { useTheme } from "./hooks/useTheme";
+import { useNow } from "./hooks/useNow";
 import { exportToJPG } from "./utils/exportImage";
 import DayColumn from "./components/DayColumn";
 import TimeRuler from "./components/TimeRuler";
 import TaskEditor from "./components/TaskEditor";
 import CategoryManager from "./components/CategoryManager";
 import Toolbar from "./components/Toolbar";
+
+const SNAP = 5;
+const MIN_DURATION = 5;
+
+function snap(min) {
+  return Math.round(min / SNAP) * SNAP;
+}
+
+function detectDayKey(clientX) {
+  const columns = document.querySelectorAll("[data-day-key]");
+  for (const col of columns) {
+    const rect = col.getBoundingClientRect();
+    if (clientX >= rect.left && clientX <= rect.right) {
+      return col.dataset.dayKey;
+    }
+  }
+  return null;
+}
 
 export default function App() {
   const {
@@ -24,6 +48,7 @@ export default function App() {
     loadTemplate,
     getTemplates,
     liveUpdateTask,
+    moveTaskToDay,
   } = useSchedule();
 
   const [editor, setEditor] = useState({
@@ -34,18 +59,28 @@ export default function App() {
   const [showCategories, setShowCategories] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [templates, setTemplates] = useState(() => getTemplates());
+  const [draggingTaskId, setDraggingTaskId] = useState(null);
 
   const gridRef = useRef(null);
+  const dragRef = useRef(null);
+  const scheduleRef = useRef(schedule);
+  scheduleRef.current = schedule;
+
   const { theme, toggleTheme } = useTheme();
+  const now = useNow();
 
-  const openAdd = (dayKey) =>
+  // ─── Editor handlers ─────────────────────────────────────
+  const openAdd = useCallback((dayKey) => {
     setEditor({ open: true, dayKey, task: null });
+  }, []);
 
-  const openEdit = (dayKey, task) =>
+  const openEdit = useCallback((dayKey, task) => {
     setEditor({ open: true, dayKey, task });
+  }, []);
 
-  const closeEditor = () =>
+  const closeEditor = useCallback(() => {
     setEditor({ open: false, dayKey: null, task: null });
+  }, []);
 
   const handleSave = (newTask) => {
     if (editor.task) {
@@ -63,6 +98,7 @@ export default function App() {
     }
   };
 
+  // ─── Export ──────────────────────────────────────────────
   const handleExport = async () => {
     if (!gridRef.current) return;
     setExporting(true);
@@ -82,6 +118,114 @@ export default function App() {
   const handleLoadTemplate = (name) => {
     loadTemplate(name);
   };
+
+  // ─── Global drag ─────────────────────────────────────────
+  const handleStartDrag = useCallback(
+    ({ taskId, dayKey, mode, task, clientX, clientY }) => {
+      dragRef.current = {
+        taskId,
+        dayKey,
+        mode,
+        origStart: task.start,
+        origEnd: task.end,
+        startX: clientX,
+        startY: clientY,
+        moved: false,
+      };
+      setDraggingTaskId(taskId);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!draggingTaskId) return;
+
+    const handleMove = (ev) => {
+      const st = dragRef.current;
+      if (!st) return;
+
+      const deltaY = ev.clientY - st.startY;
+      if (!st.moved && Math.abs(deltaY) < 3) return;
+      st.moved = true;
+
+      const deltaMin = snap(deltaY / PX_PER_MINUTE);
+      const duration = st.origEnd - st.origStart;
+
+      if (st.mode === "move") {
+        let newStart = st.origStart + deltaMin;
+        let newEnd = st.origEnd + deltaMin;
+
+        if (newStart < DAY_START_MIN) {
+          newStart = DAY_START_MIN;
+          newEnd = newStart + duration;
+        }
+        if (newEnd > DAY_END_MIN) {
+          newEnd = DAY_END_MIN;
+          newStart = newEnd - duration;
+        }
+
+        const overKey = detectDayKey(ev.clientX);
+        const targetKey = overKey || st.dayKey;
+
+        if (targetKey !== st.dayKey) {
+          // جابه‌جایی به روز جدید
+          moveTaskToDay(st.dayKey, targetKey, st.taskId, {
+            start: newStart,
+            end: newEnd,
+          });
+          st.dayKey = targetKey;
+          st.origStart = newStart;
+          st.origEnd = newEnd;
+          st.startY = ev.clientY;
+        } else {
+          // همان روز → فقط زمان
+          liveUpdateTask(st.dayKey, st.taskId, {
+            start: newStart,
+            end: newEnd,
+          });
+        }
+      } else if (st.mode === "top") {
+        let newStart = st.origStart + deltaMin;
+        if (newStart < DAY_START_MIN) newStart = DAY_START_MIN;
+        if (newStart > st.origEnd - MIN_DURATION)
+          newStart = st.origEnd - MIN_DURATION;
+        liveUpdateTask(st.dayKey, st.taskId, { start: newStart });
+      } else if (st.mode === "bottom") {
+        let newEnd = st.origEnd + deltaMin;
+        if (newEnd > DAY_END_MIN) newEnd = DAY_END_MIN;
+        if (newEnd < st.origStart + MIN_DURATION)
+          newEnd = st.origStart + MIN_DURATION;
+        liveUpdateTask(st.dayKey, st.taskId, { end: newEnd });
+      }
+    };
+
+    const handleUp = () => {
+      const st = dragRef.current;
+      // اگر حرکت نکرده بود → کلیک ساده → باز کردن ادیتور
+      if (st && !st.moved) {
+        const task = scheduleRef.current[st.dayKey]?.find(
+          (t) => t.id === st.taskId
+        );
+        if (task) openEdit(st.dayKey, task);
+      }
+      dragRef.current = null;
+      setDraggingTaskId(null);
+    };
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+
+    const mode = dragRef.current?.mode;
+    document.body.style.cursor = mode === "move" ? "grabbing" : "ns-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [draggingTaskId, liveUpdateTask, moveTaskToDay, openEdit]);
 
   const dayLabel =
     DAYS.find((d) => d.key === editor.dayKey)?.label ?? "";
@@ -115,16 +259,16 @@ export default function App() {
                 categories={categories}
                 onAdd={openAdd}
                 onEditTask={openEdit}
-                onLiveChange={(taskId, patch) =>
-                  liveUpdateTask(day.key, taskId, patch)
-                }
+                onStartDrag={handleStartDrag}
+                draggingTaskId={draggingTaskId}
+                now={now}
               />
             ))}
           </div>
         </div>
 
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-3 text-center">
-          💡 روی فضای خالی ستون یا دکمه‌ی «+ افزودن» کلیک کن. برای ویرایش، روی تسک بزن.
+          💡 برای افزودن، روی فضای خالی ستون کلیک کن. برای جابه‌جایی، تسک را بکش. برای تغییر اندازه، از لبه‌های بالا/پایین بکش.
         </p>
       </main>
 

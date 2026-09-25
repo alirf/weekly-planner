@@ -1,18 +1,13 @@
 import { PX_PER_MINUTE, DAY_START_MIN } from "../constants";
 import { minutesToHHMM, formatDuration } from "../utils/time";
-import { useDragResize } from "../hooks/useDragResize";
 
 export default function TaskBlock({
   task,
+  dayKey,
   category,
-  onClick,
-  onLiveChange,
+  isDragging,
+  onStartDrag,
 }) {
-  const { dragging, handleMouseDown, wasDragged } = useDragResize({
-    task,
-    onLiveChange: (patch) => onLiveChange(task.id, patch),
-  });
-
   const top = (task.start - DAY_START_MIN) * PX_PER_MINUTE;
   const duration = task.end - task.start;
   const height = Math.max(duration * PX_PER_MINUTE, 10);
@@ -23,19 +18,25 @@ export default function TaskBlock({
   const showDetails = height >= 90;
   const showDuration = height >= 90;
 
-  const isDragging = dragging !== null;
-
-  const handleClick = (e) => {
+  const handleMouseDown = (mode) => (e) => {
+    e.preventDefault();
     e.stopPropagation();
-    if (wasDragged()) return;
-    onClick();
+    if (e.button !== 0) return;
+    onStartDrag({
+      taskId: task.id,
+      dayKey,
+      mode,
+      task,
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
   };
 
   return (
     <div
-      className={`task-block absolute right-1 left-1 rounded-lg overflow-hidden cursor-grab select-none group ${
+      className={`task-block absolute right-1 left-1 rounded-lg overflow-hidden select-none group ${
         isDragging
-          ? "z-40 shadow-2xl ring-2 ring-white/80 dark:ring-white/40 scale-[1.02]"
+          ? "z-40 shadow-2xl ring-2 ring-white/80 dark:ring-white/40 cursor-grabbing"
           : "shadow-md hover:shadow-lg hover:z-20"
       }`}
       style={{
@@ -44,21 +45,8 @@ export default function TaskBlock({
         background: `linear-gradient(135deg, ${bg} 0%, ${shadeColor(bg, -15)} 100%)`,
         borderRight: `4px solid ${shadeColor(bg, -30)}`,
       }}
-      onClick={handleClick}
     >
-      <div
-        onMouseDown={(e) => handleMouseDown("top", e)}
-        className="absolute top-0 right-0 left-0 h-2 cursor-ns-resize z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-white/40 hover:bg-white/60"
-        title="تغییر ساعت شروع"
-      />
-
-      <div
-        onMouseDown={(e) => handleMouseDown("bottom", e)}
-        className="absolute bottom-0 right-0 left-0 h-2 cursor-ns-resize z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-white/40 hover:bg-white/60"
-        title="تغییر ساعت پایان"
-      />
-
-      <div className="relative px-2.5 py-1.5 h-full flex flex-col text-white z-20">
+      <div className="relative px-2.5 py-1.5 h-full flex flex-col text-white z-10 pointer-events-none">
         <div className="flex items-start gap-1.5">
           <div className="text-[15px] font-bold leading-tight truncate flex-1">
             {task.title || "(بدون عنوان)"}
@@ -90,8 +78,20 @@ export default function TaskBlock({
       </div>
 
       <div
-        onMouseDown={(e) => handleMouseDown("move", e)}
-        className="absolute inset-x-0 top-2 bottom-2 cursor-grab z-10"
+        onMouseDown={handleMouseDown("move")}
+        className="absolute inset-x-0 top-1.5 bottom-1.5 cursor-grab z-20"
+      />
+
+      <div
+        onMouseDown={handleMouseDown("top")}
+        className="absolute top-0 right-0 left-0 h-1.5 cursor-ns-resize z-30 hover:bg-white/40 transition-colors"
+        title="تغییر ساعت شروع"
+      />
+
+      <div
+        onMouseDown={handleMouseDown("bottom")}
+        className="absolute bottom-0 right-0 left-0 h-1.5 cursor-ns-resize z-30 hover:bg-white/40 transition-colors"
+        title="تغییر ساعت پایان"
       />
     </div>
   );

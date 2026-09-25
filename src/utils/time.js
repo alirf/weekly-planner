@@ -11,7 +11,6 @@ export function hhmmToMinutes(str) {
   return h * 60 + m;
 }
 
-// لیست مارک‌های ساعت (هر 30 دقیقه)
 export function buildHourMarks(stepMinutes = 30) {
   const marks = [];
   for (let m = DAY_START_MIN; m <= DAY_END_MIN; m += stepMinutes) {
@@ -20,11 +19,29 @@ export function buildHourMarks(stepMinutes = 30) {
   return marks;
 }
 
-// مدت به فرمت خوانا: "1 ساعت و 35 دقیقه"
 export function formatDuration(minutes) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   if (h === 0) return `${m} دقیقه`;
   if (m === 0) return `${h} ساعت`;
   return `${h} ساعت و ${m} دقیقه`;
+}
+
+export function isToday(dayKey) {
+  const DAYS = [
+    { key: "sat", label: "شنبه" },
+    { key: "sun", label: "یکشنبه" },
+    { key: "mon", label: "دوشنبه" },
+    { key: "tue", label: "سه‌شنبه" },
+    { key: "wed", label: "چهارشنبه" },
+    { key: "thu", label: "پنجشنبه" },
+    { key: "fri", label: "جمعه" },
+  ];
+  const todayLabel = new Date().toLocaleDateString("fa-IR", { weekday: "long" });
+  const todayDay = DAYS.find((d) => d.label === todayLabel);
+  return todayDay?.key === dayKey;
+}
+
+export function dateToMinutes(date) {
+  return date.getHours() * 60 + date.getMinutes();
 }
