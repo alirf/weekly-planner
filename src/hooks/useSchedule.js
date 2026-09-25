@@ -302,6 +302,18 @@ const copyTaskToDay = useCallback((fromDayKey, toDayKey, taskId) => {
   if (error) alert("⚠️ " + error);
 }, []);
 
+const toggleTaskDone = useCallback((dayKey, taskId) => {
+  setState((prev) => ({
+    ...prev,
+    schedule: {
+      ...prev.schedule,
+      [dayKey]: prev.schedule[dayKey].map((t) =>
+        t.id === taskId ? { ...t, done: !t.done } : t
+      ),
+    },
+  }));
+}, []);
+
   return {
     schedule: state.schedule,
     categories: state.categories,
@@ -319,5 +331,6 @@ const copyTaskToDay = useCallback((fromDayKey, toDayKey, taskId) => {
     moveTaskToDay,
     copyTaskToDay,
     duplicateTask,
+    toggleTaskDone,
   };
 }

@@ -15,6 +15,7 @@ import TaskEditor from "./components/TaskEditor";
 import CategoryManager from "./components/CategoryManager";
 import Toolbar from "./components/Toolbar";
 import TaskContextMenu from "./components/TaskContextMenu";
+import StatsBar from "./components/StatsBar";
 
 const SNAP = 5;
 const MIN_DURATION = 5;
@@ -52,6 +53,7 @@ export default function App() {
     moveTaskToDay,
     duplicateTask,
     copyTaskToDay,
+    toggleTaskDone,
   } = useSchedule();
 
   const [editor, setEditor] = useState({
@@ -104,8 +106,8 @@ export default function App() {
   };
 
   const handleTaskContextMenu = useCallback((clientX, clientY, dayKey, taskId) => {
-  setContextMenu({ x: clientX, y: clientY, dayKey, taskId });
-}, []);
+    setContextMenu({ x: clientX, y: clientY, dayKey, taskId });
+  }, []);
 
   // ─── Export ──────────────────────────────────────────────
   const handleExport = async () => {
@@ -252,6 +254,8 @@ export default function App() {
       />
 
       <main className="max-w-[1500px] mx-auto p-4">
+        <StatsBar schedule={schedule} categories={categories} />
+
         <div
           ref={gridRef}
           className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors"
@@ -270,13 +274,14 @@ export default function App() {
                 draggingTaskId={draggingTaskId}
                 now={now}
                 onTaskContextMenu={handleTaskContextMenu}
+                onToggleDone={toggleTaskDone}
               />
             ))}
           </div>
         </div>
 
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-3 text-center">
-          💡 برای افزودن، روی فضای خالی ستون کلیک کن. برای جابه‌جایی، تسک را بکش. برای تغییر اندازه، از لبه‌های بالا/پایین بکش.
+          💡 برای افزودن، روی فضای خالی ستون کلیک کن. برای جابه‌جایی، تسک را بکش. برای انجام، روی چک‌باکس کلیک کن.
         </p>
       </main>
 

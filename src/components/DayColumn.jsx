@@ -13,6 +13,7 @@ export default function DayColumn({
   draggingTaskId,
   now,
   onTaskContextMenu,
+  onToggleDone,
 }) {
   const today = isToday(day.key);
 
@@ -22,11 +23,10 @@ export default function DayColumn({
       className="flex-1 min-w-[130px] border-l border-slate-200 dark:border-slate-700 relative transition-colors"
     >
       <div
-        className={`sticky top-0 z-10 h-10 border-b flex items-center justify-center font-bold text-sm transition-colors ${
-          today
+        className={`sticky top-0 z-10 h-10 border-b flex items-center justify-center font-bold text-sm transition-colors ${today
             ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
             : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
-        }`}
+          }`}
       >
         {day.label}
         {today && (
@@ -60,6 +60,7 @@ export default function DayColumn({
             onContextMenu={(x, y, taskId) =>
               onTaskContextMenu(x, y, day.key, taskId)
             }
+            onToggleDone={(taskId) => onToggleDone(day.key, taskId)}
           />
         ))}
 
