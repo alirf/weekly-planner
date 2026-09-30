@@ -8,7 +8,10 @@ import {
 import { useSchedule } from "./hooks/useSchedule";
 import { useTheme } from "./hooks/useTheme";
 import { useNow } from "./hooks/useNow";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { exportToJPG } from "./utils/exportImage";
+import { isToday } from "./utils/time";
+import ShortcutsHelp from "./components/ShortcutsHelp";
 import DayColumn from "./components/DayColumn";
 import TimeRuler from "./components/TimeRuler";
 import TaskEditor from "./components/TaskEditor";
@@ -54,6 +57,9 @@ export default function App() {
     duplicateTask,
     copyTaskToDay,
     toggleTaskDone,
+    snapshot,
+    undo,
+    redo,
   } = useSchedule();
 
   const [editor, setEditor] = useState({
@@ -65,6 +71,9 @@ export default function App() {
   const [exporting, setExporting] = useState(false);
   const [templates, setTemplates] = useState(() => getTemplates());
   const [draggingTaskId, setDraggingTaskId] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null); // { dayKey, taskId }
+  const [showHelp, setShowHelp] = useState(false);
+  const [clipboard, setClipboard] = useState(null);       // برای Ctrl+C/V
 
   const gridRef = useRef(null);
   const dragRef = useRef(null);
@@ -107,6 +116,7 @@ export default function App() {
 
   const handleTaskContextMenu = useCallback((clientX, clientY, dayKey, taskId) => {
     setContextMenu({ x: clientX, y: clientY, dayKey, taskId });
+    setSelectedTask({ dayKey, taskId });
   }, []);
 
   // ─── Export ──────────────────────────────────────────────
@@ -130,9 +140,18 @@ export default function App() {
     loadTemplate(name);
   };
 
+  const getSelectedTask = useCallback(() => {
+    if (!selectedTask) return null;
+    const task = schedule[selectedTask.dayKey]?.find(
+      (t) => t.id === selectedTask.taskId
+    );
+    return task ? { dayKey: selectedTask.dayKey, task } : null;
+  }, [selectedTask, schedule]);
+
   // ─── Global drag ─────────────────────────────────────────
   const handleStartDrag = useCallback(
     ({ taskId, dayKey, mode, task, clientX, clientY }) => {
+      snapshot();
       dragRef.current = {
         taskId,
         dayKey,
@@ -144,8 +163,9 @@ export default function App() {
         moved: false,
       };
       setDraggingTaskId(taskId);
+      setSelectedTask({ dayKey, taskId });
     },
-    []
+    [snapshot]
   );
 
   useEffect(() => {
@@ -182,7 +202,8 @@ export default function App() {
           moveTaskToDay(st.dayKey, targetKey, st.taskId, {
             start: newStart,
             end: newEnd,
-          });
+          },
+            { noHistory: true });
           st.dayKey = targetKey;
           st.origStart = newStart;
           st.origEnd = newEnd;
@@ -239,6 +260,108 @@ export default function App() {
   const dayLabel =
     DAYS.find((d) => d.key === editor.dayKey)?.label ?? "";
 
+  useKeyboardShortcuts({
+    escape: () => {
+      if (contextMenu) { setContextMenu(null); return; }
+      if (editor.open) { closeEditor(); return; }
+      if (showCategories) { setShowCategories(false); return; }
+      if (showHelp) { setShowHelp(false); return; }
+      setSelectedTask(null);
+    },
+
+    export: handleExport,
+
+    undo: () => {
+      undo();
+      setSelectedTask(null);
+    },
+
+    redo,
+
+    help: () => setShowHelp(true),
+
+    newTask: () => {
+      const todayKey = DAYS.find((d) => isToday(d.key))?.key ?? DAYS[0].key;
+      openAdd(todayKey);
+    },
+
+    today: () => {
+      const el = document.querySelector('[data-day-key].bg-blue-100, [data-day-key] [class*="bg-blue-100"]');
+      // اسکرول به روز جاری
+      const todayKey = DAYS.find((d) => isToday(d.key))?.key;
+      if (todayKey) {
+        const col = document.querySelector(`[data-day-key="${todayKey}"]`);
+        col?.scrollIntoView({ behavior: "smooth", inline: "center" });
+      }
+    },
+
+    duplicate: () => {
+      const sel = getSelectedTask();
+      if (!sel) return alert("اول یه تسک رو انتخاب کن (راست‌کلیک روش)");
+      duplicateTask(sel.dayKey, sel.task.id);
+    },
+
+    copy: () => {
+      const sel = getSelectedTask();
+      if (!sel) return alert("اول یه تسک رو انتخاب کن");
+      setClipboard({
+        task: { ...sel.task },
+        fromDayKey: sel.dayKey,
+      });
+      // فیدبک کوچیک
+      console.log("کپی شد:", sel.task.title);
+    },
+
+    paste: () => {
+      if (!clipboard) return alert("چیزی کپی نکردی");
+      // چسباندن در روز انتخاب‌شده یا روز فعلی
+      const targetDayKey = selectedTask?.dayKey || clipboard.fromDayKey;
+      copyTaskToDay(clipboard.fromDayKey, targetDayKey, clipboard.task.id);
+    },
+
+    deleteTask: () => {
+      const sel = getSelectedTask();
+      if (!sel) return;
+      if (confirm(`تسک «${sel.task.title}» حذف بشه؟`)) {
+        removeTask(sel.dayKey, sel.task.id);
+        setSelectedTask(null);
+      }
+    },
+
+    enter: () => {
+      const sel = getSelectedTask();
+      if (!sel) return;
+      openEdit(sel.dayKey, sel.task);
+    },
+
+    toggleDone: () => {
+      const sel = getSelectedTask();
+      if (!sel) return;
+      toggleTaskDone(sel.dayKey, sel.task.id);
+    },
+
+    moveUp: () => {
+      const sel = getSelectedTask();
+      if (!sel) return;
+      const newStart = Math.max(DAY_START_MIN, sel.task.start - 5);
+      updateTask(sel.dayKey, sel.task.id, {
+        start: newStart,
+        end: newStart + (sel.task.end - sel.task.start),
+      });
+    },
+
+    moveDown: () => {
+      const sel = getSelectedTask();
+      if (!sel) return;
+      const dur = sel.task.end - sel.task.start;
+      const newEnd = Math.min(DAY_END_MIN, sel.task.end + 5);
+      updateTask(sel.dayKey, sel.task.id, {
+        end: newEnd,
+        start: newEnd - dur,
+      });
+    },
+  });
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
       <Toolbar
@@ -251,6 +374,7 @@ export default function App() {
         exporting={exporting}
         theme={theme}
         onToggleTheme={toggleTheme}
+        onToggleHelp={() => setShowHelp(true)}
       />
 
       <main className="max-w-[1500px] mx-auto p-4">
@@ -269,9 +393,13 @@ export default function App() {
                 tasks={schedule[day.key] ?? []}
                 categories={categories}
                 onAdd={openAdd}
-                onEditTask={openEdit}
+                onEditTask={(dayKey, task) => {
+                  setSelectedTask({ dayKey, taskId: task.id });
+                  openEdit(dayKey, task);
+                }}
                 onStartDrag={handleStartDrag}
                 draggingTaskId={draggingTaskId}
+                selectedTaskId={selectedTask?.taskId}
                 now={now}
                 onTaskContextMenu={handleTaskContextMenu}
                 onToggleDone={toggleTaskDone}
@@ -305,6 +433,8 @@ export default function App() {
         onRemove={removeCategory}
         onClose={() => setShowCategories(false)}
       />
+
+      <ShortcutsHelp open={showHelp} onClose={() => setShowHelp(false)} />
 
       {contextMenu && (() => {
         const task = schedule[contextMenu.dayKey]?.find(

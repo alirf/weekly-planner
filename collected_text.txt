@@ -1,10 +1,10 @@
 ======================================================================
 📁 پوشه مبدا: D:\weekly-planner
-📊 تعداد فایل‌های جمع‌آوری شده: 20
+📊 تعداد فایل‌های جمع‌آوری شده: 23
 ❌ تعداد خطاها: 0
-📁 پوشه‌های رد شده: .git, coverage, .nuxt, .vscode, out, dist, .venv, assets, .env, build, env, static, node_modules, .output, .next, public, .idea, venv, target, __pycache__
+📁 پوشه‌های رد شده: .output, build, assets, .nuxt, .venv, .idea, env, .env, target, coverage, .vscode, out, dist, public, static, .next, .git, __pycache__, node_modules, venv
 ======================================================================
-⚡ فقط پسوندهای: .tsx, .css, .java, .ts, .jsx, .py, .js
+⚡ فقط پسوندهای: .py, .jsx, .ts, .tsx, .java, .js, .css
 ======================================================================
 
 
@@ -200,8 +200,13 @@
 ──────────────────────────────────────────────────────────────────────
 📄 src/App.jsx
 ──────────────────────────────────────────────────────────────────────
-import { useRef, useState } from "react";
-import { DAYS } from "./constants";
+import { useRef, useState, useEffect, useCallback } from "react";
+import {
+  DAYS,
+  DAY_START_MIN,
+  DAY_END_MIN,
+  PX_PER_MINUTE,
+} from "./constants";
 import { useSchedule } from "./hooks/useSchedule";
 import { useTheme } from "./hooks/useTheme";
 import { useNow } from "./hooks/useNow";
@@ -211,6 +216,26 @@ import TimeRuler from "./components/TimeRuler";
 import TaskEditor from "./components/TaskEditor";
 import CategoryManager from "./components/CategoryManager";
 import Toolbar from "./components/Toolbar";
+import TaskContextMenu from "./components/TaskContextMenu";
+import StatsBar from "./components/StatsBar";
+
+const SNAP = 5;
+const MIN_DURATION = 5;
+
+function snap(min) {
+  return Math.round(min / SNAP) * SNAP;
+}
+
+function detectDayKey(clientX) {
+  const columns = document.querySelectorAll("[data-day-key]");
+  for (const col of columns) {
+    const rect = col.getBoundingClientRect();
+    if (clientX >= rect.left && clientX <= rect.right) {
+      return col.dataset.dayKey;
+    }
+  }
+  return null;
+}
 
 export default function App() {
   const {
@@ -227,6 +252,10 @@ export default function App() {
     loadTemplate,
     getTemplates,
     liveUpdateTask,
+    moveTaskToDay,
+    duplicateTask,
+    copyTaskToDay,
+    toggleTaskDone,
   } = useSchedule();
 
   const [editor, setEditor] = useState({
@@ -237,19 +266,30 @@ export default function App() {
   const [showCategories, setShowCategories] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [templates, setTemplates] = useState(() => getTemplates());
+  const [draggingTaskId, setDraggingTaskId] = useState(null);
 
   const gridRef = useRef(null);
+  const dragRef = useRef(null);
+  const scheduleRef = useRef(schedule);
+  scheduleRef.current = schedule;
+
   const { theme, toggleTheme } = useTheme();
-  const now = useNow();                      
+  const now = useNow();
 
-  const openAdd = (dayKey) =>
+  const [contextMenu, setContextMenu] = useState(null);
+
+  // ─── Editor handlers ─────────────────────────────────────
+  const openAdd = useCallback((dayKey) => {
     setEditor({ open: true, dayKey, task: null });
+  }, []);
 
-  const openEdit = (dayKey, task) =>
+  const openEdit = useCallback((dayKey, task) => {
     setEditor({ open: true, dayKey, task });
+  }, []);
 
-  const closeEditor = () =>
+  const closeEditor = useCallback(() => {
     setEditor({ open: false, dayKey: null, task: null });
+  }, []);
 
   const handleSave = (newTask) => {
     if (editor.task) {
@@ -267,6 +307,11 @@ export default function App() {
     }
   };
 
+  const handleTaskContextMenu = useCallback((clientX, clientY, dayKey, taskId) => {
+    setContextMenu({ x: clientX, y: clientY, dayKey, taskId });
+  }, []);
+
+  // ─── Export ──────────────────────────────────────────────
   const handleExport = async () => {
     if (!gridRef.current) return;
     setExporting(true);
@@ -287,6 +332,112 @@ export default function App() {
     loadTemplate(name);
   };
 
+  // ─── Global drag ─────────────────────────────────────────
+  const handleStartDrag = useCallback(
+    ({ taskId, dayKey, mode, task, clientX, clientY }) => {
+      dragRef.current = {
+        taskId,
+        dayKey,
+        mode,
+        origStart: task.start,
+        origEnd: task.end,
+        startX: clientX,
+        startY: clientY,
+        moved: false,
+      };
+      setDraggingTaskId(taskId);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!draggingTaskId) return;
+
+    const handleMove = (ev) => {
+      const st = dragRef.current;
+      if (!st) return;
+
+      const deltaY = ev.clientY - st.startY;
+      if (!st.moved && Math.abs(deltaY) < 3) return;
+      st.moved = true;
+
+      const deltaMin = snap(deltaY / PX_PER_MINUTE);
+      const duration = st.origEnd - st.origStart;
+
+      if (st.mode === "move") {
+        let newStart = st.origStart + deltaMin;
+        let newEnd = st.origEnd + deltaMin;
+
+        if (newStart < DAY_START_MIN) {
+          newStart = DAY_START_MIN;
+          newEnd = newStart + duration;
+        }
+        if (newEnd > DAY_END_MIN) {
+          newEnd = DAY_END_MIN;
+          newStart = newEnd - duration;
+        }
+
+        const overKey = detectDayKey(ev.clientX);
+        const targetKey = overKey || st.dayKey;
+
+        if (targetKey !== st.dayKey) {
+          moveTaskToDay(st.dayKey, targetKey, st.taskId, {
+            start: newStart,
+            end: newEnd,
+          });
+          st.dayKey = targetKey;
+          st.origStart = newStart;
+          st.origEnd = newEnd;
+          st.startY = ev.clientY;
+        } else {
+          liveUpdateTask(st.dayKey, st.taskId, {
+            start: newStart,
+            end: newEnd,
+          });
+        }
+      } else if (st.mode === "top") {
+        let newStart = st.origStart + deltaMin;
+        if (newStart < DAY_START_MIN) newStart = DAY_START_MIN;
+        if (newStart > st.origEnd - MIN_DURATION)
+          newStart = st.origEnd - MIN_DURATION;
+        liveUpdateTask(st.dayKey, st.taskId, { start: newStart });
+      } else if (st.mode === "bottom") {
+        let newEnd = st.origEnd + deltaMin;
+        if (newEnd > DAY_END_MIN) newEnd = DAY_END_MIN;
+        if (newEnd < st.origStart + MIN_DURATION)
+          newEnd = st.origStart + MIN_DURATION;
+        liveUpdateTask(st.dayKey, st.taskId, { end: newEnd });
+      }
+    };
+
+    const handleUp = () => {
+      const st = dragRef.current;
+      // اگر حرکت نکرده بود → کلیک ساده → باز کردن ادیتور
+      if (st && !st.moved) {
+        const task = scheduleRef.current[st.dayKey]?.find(
+          (t) => t.id === st.taskId
+        );
+        if (task) openEdit(st.dayKey, task);
+      }
+      dragRef.current = null;
+      setDraggingTaskId(null);
+    };
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+
+    const mode = dragRef.current?.mode;
+    document.body.style.cursor = mode === "move" ? "grabbing" : "ns-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [draggingTaskId, liveUpdateTask, moveTaskToDay, openEdit]);
+
   const dayLabel =
     DAYS.find((d) => d.key === editor.dayKey)?.label ?? "";
 
@@ -305,6 +456,8 @@ export default function App() {
       />
 
       <main className="max-w-[1500px] mx-auto p-4">
+        <StatsBar schedule={schedule} categories={categories} />
+
         <div
           ref={gridRef}
           className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors"
@@ -319,17 +472,18 @@ export default function App() {
                 categories={categories}
                 onAdd={openAdd}
                 onEditTask={openEdit}
-                onLiveChange={(taskId, patch) =>
-                  liveUpdateTask(day.key, taskId, patch)
-                }
+                onStartDrag={handleStartDrag}
+                draggingTaskId={draggingTaskId}
                 now={now}
+                onTaskContextMenu={handleTaskContextMenu}
+                onToggleDone={toggleTaskDone}
               />
             ))}
           </div>
         </div>
 
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-3 text-center">
-          💡 روی فضای خالی ستون یا دکمه‌ی «+ افزودن» کلیک کن. برای ویرایش، روی تسک بزن.
+          💡 برای افزودن، روی فضای خالی ستون کلیک کن. برای جابه‌جایی، تسک را بکش. برای انجام، روی چک‌باکس کلیک کن.
         </p>
       </main>
 
@@ -353,6 +507,34 @@ export default function App() {
         onRemove={removeCategory}
         onClose={() => setShowCategories(false)}
       />
+
+      {contextMenu && (() => {
+        const task = schedule[contextMenu.dayKey]?.find(
+          (t) => t.id === contextMenu.taskId
+        );
+        if (!task) return null;
+        return (
+          <TaskContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            dayKey={contextMenu.dayKey}
+            onClose={() => setContextMenu(null)}
+            onEdit={() => openEdit(contextMenu.dayKey, task)}
+            onDuplicate={() =>
+              duplicateTask(contextMenu.dayKey, contextMenu.taskId)
+            }
+            onCopyToDay={(targetKey) =>
+              copyTaskToDay(contextMenu.dayKey, targetKey, contextMenu.taskId)
+            }
+            onMoveToDay={(targetKey) =>
+              moveTaskToDay(contextMenu.dayKey, targetKey, contextMenu.taskId, {}, { smart: true })
+            }
+            onDelete={() =>
+              removeTask(contextMenu.dayKey, contextMenu.taskId)
+            }
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -512,18 +694,29 @@ import TaskBlock from "./TaskBlock";
 import NowLine from "./NowLine";
 
 export default function DayColumn({
-  day, tasks, categories, onAdd, onEditTask, onLiveChange, now,
+  day,
+  tasks,
+  categories,
+  onAdd,
+  onEditTask,
+  onStartDrag,
+  draggingTaskId,
+  now,
+  onTaskContextMenu,
+  onToggleDone,
 }) {
   const today = isToday(day.key);
 
   return (
-    <div className="flex-1 min-w-[130px] border-l border-slate-200 dark:border-slate-700 relative transition-colors">
+    <div
+      data-day-key={day.key}
+      className="flex-1 min-w-[130px] border-l border-slate-200 dark:border-slate-700 relative transition-colors"
+    >
       <div
-        className={`sticky top-0 z-10 h-10 border-b flex items-center justify-center font-bold text-sm transition-colors ${
-          today
+        className={`sticky top-0 z-10 h-10 border-b flex items-center justify-center font-bold text-sm transition-colors ${today
             ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
             : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
-        }`}
+          }`}
       >
         {day.label}
         {today && (
@@ -550,9 +743,14 @@ export default function DayColumn({
           <TaskBlock
             key={task.id}
             task={task}
+            dayKey={day.key}
             category={categories.find((c) => c.id === task.categoryId)}
-            onClick={() => onEditTask(day.key, task)}
-            onLiveChange={onLiveChange}
+            isDragging={draggingTaskId === task.id}
+            onStartDrag={onStartDrag}
+            onContextMenu={(x, y, taskId) =>
+              onTaskContextMenu(x, y, day.key, taskId)
+            }
+            onToggleDone={(taskId) => onToggleDone(day.key, taskId)}
           />
         ))}
 
@@ -601,26 +799,112 @@ export default function NowLine({ now }) {
 }
 
 ──────────────────────────────────────────────────────────────────────
+📄 src/components/StatsBar.jsx
+──────────────────────────────────────────────────────────────────────
+import { DAYS } from "../constants";
+
+export default function StatsBar({ schedule, categories }) {
+  const allTasks = DAYS.flatMap((d) => schedule[d.key] || []);
+  const total = allTasks.length;
+  const done = allTasks.filter((t) => t.done).length;
+  const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+
+  const byCategory = categories
+    .map((cat) => {
+      const tasks = allTasks.filter((t) => t.categoryId === cat.id);
+      const d = tasks.filter((t) => t.done).length;
+      return { ...cat, total: tasks.length, done: d };
+    })
+    .filter((c) => c.total > 0);
+
+  if (total === 0) {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 mb-4 text-center text-sm text-slate-400 dark:text-slate-500 transition-colors">
+        هنوز هیچ تسکی نداری — برنامه‌ی هفته‌ات رو بساز ✨
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 mb-4 transition-colors">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">
+            {percent === 100 ? "🎉" : "📊"}
+          </span>
+          <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+            این هفته
+          </span>
+        </div>
+
+        <div className="flex-1 min-w-[180px] h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-l from-emerald-400 to-emerald-600 rounded-full transition-all duration-500"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+
+        <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
+          <span className="text-emerald-600 dark:text-emerald-400">{done}</span>
+          <span className="text-slate-400"> / {total}</span>
+          <span className="text-xs text-slate-400 mr-2">({percent}%)</span>
+        </div>
+
+        {percent === 100 && (
+          <span className="text-xs bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-semibold">
+            عالی! تمام شد 🏆
+          </span>
+        )}
+      </div>
+
+      {byCategory.length > 0 && (
+        <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          {byCategory.map((cat) => {
+            const catPercent =
+              cat.total === 0 ? 0 : Math.round((cat.done / cat.total) * 100);
+            return (
+              <div key={cat.id} className="flex items-center gap-2 text-xs">
+                <span
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ background: cat.color }}
+                />
+                <span className="text-slate-600 dark:text-slate-300 font-semibold">
+                  {cat.name}
+                </span>
+                <span className="text-slate-400 tabular-nums">
+                  {cat.done}/{cat.total}
+                </span>
+                {catPercent === 100 && (
+                  <span className="text-emerald-500">✓</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+──────────────────────────────────────────────────────────────────────
 📄 src/components/TaskBlock.jsx
 ──────────────────────────────────────────────────────────────────────
 import { PX_PER_MINUTE, DAY_START_MIN } from "../constants";
 import { minutesToHHMM, formatDuration } from "../utils/time";
-import { useDragResize } from "../hooks/useDragResize";
 
 export default function TaskBlock({
   task,
+  dayKey,
   category,
-  onClick,
-  onLiveChange,
+  isDragging,
+  onStartDrag,
+  onContextMenu,
+  onToggleDone,
 }) {
-  const { dragging, handleMouseDown, wasDragged } = useDragResize({
-    task,
-    onLiveChange: (patch) => onLiveChange(task.id, patch),
-  });
-
   const top = (task.start - DAY_START_MIN) * PX_PER_MINUTE;
   const duration = task.end - task.start;
   const height = Math.max(duration * PX_PER_MINUTE, 10);
+  const done = !!task.done;
 
   const bg = category?.color ?? "#6b7280";
   const compact = height < 50;
@@ -628,44 +912,46 @@ export default function TaskBlock({
   const showDetails = height >= 90;
   const showDuration = height >= 90;
 
-  const isDragging = dragging !== null;
-
-  const handleClick = (e) => {
+  const handleMouseDown = (mode) => (e) => {
+    e.preventDefault();
     e.stopPropagation();
-    if (wasDragged()) return;
-    onClick();
+    if (e.button !== 0) return;
+    onStartDrag({
+      taskId: task.id,
+      dayKey,
+      mode,
+      task,
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
   };
 
   return (
     <div
-      className={`task-block absolute right-1 left-1 rounded-lg overflow-hidden cursor-grab select-none group ${
-        isDragging
-          ? "z-40 shadow-2xl ring-2 ring-white/80 dark:ring-white/40 scale-[1.02]"
+      className={`task-block absolute right-1 left-1 rounded-lg overflow-hidden select-none group ${isDragging
+        ? "z-40 shadow-2xl ring-2 ring-white/80 dark:ring-white/40 cursor-grabbing"
+        : done
+          ? "opacity-55 hover:opacity-80 shadow-sm"
           : "shadow-md hover:shadow-lg hover:z-20"
-      }`}
+        }`}
       style={{
         top: `${top}px`,
         height: `${height}px`,
-        background: `linear-gradient(135deg, ${bg} 0%, ${shadeColor(bg, -15)} 100%)`,
+        background: done
+          ? `linear-gradient(135deg, ${bg} 0%, ${shadeColor(bg, -15)} 100%)`
+          : `linear-gradient(135deg, ${bg} 0%, ${shadeColor(bg, -15)} 100%)`,
         borderRight: `4px solid ${shadeColor(bg, -30)}`,
+        filter: done ? "grayscale(35%)" : "none",
       }}
-      onClick={handleClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu(e.clientX, e.clientY, task.id);
+      }}
     >
-      <div
-        onMouseDown={(e) => handleMouseDown("top", e)}
-        className="absolute top-0 right-0 left-0 h-2 cursor-ns-resize z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-white/40 hover:bg-white/60"
-        title="تغییر ساعت شروع"
-      />
-
-      <div
-        onMouseDown={(e) => handleMouseDown("bottom", e)}
-        className="absolute bottom-0 right-0 left-0 h-2 cursor-ns-resize z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-white/40 hover:bg-white/60"
-        title="تغییر ساعت پایان"
-      />
-
-      <div className="relative px-2.5 py-1.5 h-full flex flex-col text-white z-20">
+      <div className="relative px-2.5 py-1.5 h-full flex flex-col text-white z-10 pointer-events-none">
         <div className="flex items-start gap-1.5">
-          <div className="text-[15px] font-bold leading-tight truncate flex-1">
+          <div className={`text-[15px] font-bold leading-tight truncate flex-1 ${done ? "line-through decoration-2" : ""}`}>
             {task.title || "(بدون عنوان)"}
           </div>
           {!compact && showDuration && (
@@ -682,7 +968,7 @@ export default function TaskBlock({
         )}
 
         {showDetails && task.details && (
-          <div className="text-[12px] mt-1.5 leading-tight line-clamp-3 border-t border-white/25 pt-1 opacity-90">
+          <div className={`text-[12px] mt-1.5 leading-tight line-clamp-3 border-t border-white/25 pt-1 opacity-90 ${done ? "line-through" : ""}`}>
             {task.details}
           </div>
         )}
@@ -695,8 +981,40 @@ export default function TaskBlock({
       </div>
 
       <div
-        onMouseDown={(e) => handleMouseDown("move", e)}
-        className="absolute inset-x-0 top-2 bottom-2 cursor-grab z-10"
+        onMouseDown={handleMouseDown("move")}
+        className="absolute inset-x-0 top-1.5 bottom-1.5 cursor-grab z-20"
+      />
+
+      <button
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleDone(task.id);
+        }}
+        className={`absolute top-1.5 left-1.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all z-30 ${done
+            ? "bg-white border-white shadow-md"
+            : "border-white/60 bg-black/15 hover:bg-white/30 opacity-0 group-hover:opacity-100"
+          }`}
+        title={done ? "لغو انجام" : "علامت‌گذاری به عنوان انجام شده"}
+        style={done ? { color: shadeColor(bg, -30) } : {}}
+      >
+        {done && (
+          <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        )}
+      </button>ّ
+
+      <div
+        onMouseDown={handleMouseDown("top")}
+        className="absolute top-0 right-0 left-0 h-1.5 cursor-ns-resize z-30 hover:bg-white/40 transition-colors"
+        title="تغییر ساعت شروع"
+      />
+
+      <div
+        onMouseDown={handleMouseDown("bottom")}
+        className="absolute bottom-0 right-0 left-0 h-1.5 cursor-ns-resize z-30 hover:bg-white/40 transition-colors"
+        title="تغییر ساعت پایان"
       />
     </div>
   );
@@ -709,6 +1027,151 @@ function shadeColor(hex, percent) {
   const G = Math.max(0, Math.min(255, ((num >> 8) & 0x00ff) + amt));
   const B = Math.max(0, Math.min(255, (num & 0x0000ff) + amt));
   return "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 src/components/TaskContextMenu.jsx
+──────────────────────────────────────────────────────────────────────
+import { useEffect, useRef, useState } from "react";
+import { DAYS } from "../constants";
+
+export default function TaskContextMenu({
+  x,
+  y,
+  dayKey,
+  onClose,
+  onEdit,
+  onDuplicate,
+  onCopyToDay,
+  onMoveToDay,
+  onDelete,
+}) {
+  const menuRef = useRef(null);
+  const [submenu, setSubmenu] = useState(null); // null | "copy" | "move"
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+    const handleEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEsc);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, [onClose]);
+
+  const style = {
+    top: `${Math.min(y, window.innerHeight - 380)}px`,
+    left: `${Math.min(x, window.innerWidth - 260)}px`,
+  };
+
+  const otherDays = DAYS.filter((d) => d.key !== dayKey);
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-[100] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 py-1.5 min-w-[230px] text-sm"
+      style={style}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <MenuItem
+        icon="✏️"
+        label="ویرایش"
+        onClick={() => { onEdit(); onClose(); }}
+      />
+      <MenuItem
+        icon="📄"
+        label="تکرار در همین روز"
+        onClick={() => { onDuplicate(); onClose(); }}
+      />
+
+      <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
+
+      <div
+        className="relative"
+        onMouseEnter={() => setSubmenu("copy")}
+        onMouseLeave={() => setSubmenu(null)}
+      >
+        <MenuItem icon="📋" label="کپی به روز..." hasSubmenu />
+        {submenu === "copy" && (
+          <Submenu
+            days={otherDays}
+            onSelect={(targetKey) => {
+              onCopyToDay(targetKey);
+              onClose();
+            }}
+          />
+        )}
+      </div>
+
+      <div
+        className="relative"
+        onMouseEnter={() => setSubmenu("move")}
+        onMouseLeave={() => setSubmenu(null)}
+      >
+        <MenuItem icon="➡️" label="انتقال به روز..." hasSubmenu />
+        {submenu === "move" && (
+          <Submenu
+            days={otherDays}
+            onSelect={(targetKey) => {
+              onMoveToDay(targetKey);
+              onClose();
+            }}
+          />
+        )}
+      </div>
+
+      <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
+
+      <MenuItem
+        icon="🗑"
+        label="حذف"
+        danger
+        onClick={() => { onDelete(); onClose(); }}
+      />
+    </div>
+  );
+}
+
+function MenuItem({ icon, label, onClick, danger, hasSubmenu }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-right px-3 py-2 flex items-center gap-2 transition-colors ${
+        danger
+          ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
+          : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+      }`}
+    >
+      <span className="w-5 text-center">{icon}</span>
+      <span className="flex-1">{label}</span>
+      {hasSubmenu && <span className="text-slate-400 text-[10px]">◀</span>}
+    </button>
+  );
+}
+
+function Submenu({ days, onSelect }) {
+  return (
+    <div
+      className="absolute top-0 right-full mr-1 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 py-1.5 min-w-[150px] z-[101]"
+    >
+      {days.map((d) => (
+        <button
+          key={d.key}
+          onClick={() => onSelect(d.key)}
+          className="w-full text-right px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+        >
+          {d.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 ──────────────────────────────────────────────────────────────────────
@@ -1111,15 +1574,33 @@ export const EMPTY_SCHEDULE = {
 📄 src/hooks/useDragResize.js
 ──────────────────────────────────────────────────────────────────────
 import { useRef, useState, useCallback } from "react";
-import { DAY_START_MIN, DAY_END_MIN, PX_PER_MINUTE } from "../constants";
+import {
+  DAY_START_MIN,
+  DAY_END_MIN,
+  PX_PER_MINUTE,
+  COLUMN_HEIGHT,
+} from "../constants";
 
 const SNAP = 5;
+const MIN_DURATION = 5;
 
 function snap(min) {
   return Math.round(min / SNAP) * SNAP;
 }
 
-export function useDragResize({ task, onLiveChange }) {
+/**
+ * @param {Object} opts
+ * @param {Object} opts.task
+ * @param {string} opts.dayKey
+ * @param {Function} opts.onLiveChange - (patch) => void
+ * @param {Function} opts.onLiveDayChange - (newDayKey, patch) => void  ← برای تغییر روز
+ */
+export function useDragResize({
+  task,
+  dayKey,
+  onLiveChange,
+  onLiveDayChange,
+}) {
   const [dragging, setDragging] = useState(null);
   const stateRef = useRef(null);
 
@@ -1130,9 +1611,12 @@ export function useDragResize({ task, onLiveChange }) {
       if (e.button !== 0) return;
 
       stateRef.current = {
+        startX: e.clientX,
         startY: e.clientY,
         origStart: task.start,
         origEnd: task.end,
+        origDayKey: dayKey,
+        currentDayKey: dayKey,
         moved: false,
       };
       setDragging(mode);
@@ -1143,18 +1627,20 @@ export function useDragResize({ task, onLiveChange }) {
 
       const handleMouseMove = (ev) => {
         if (!stateRef.current) return;
-        const deltaY = ev.clientY - stateRef.current.startY;
+        const st = stateRef.current;
+        const deltaY = ev.clientY - st.startY;
 
-        if (!stateRef.current.moved && Math.abs(deltaY) < 3) return;
-        stateRef.current.moved = true;
+        // آستانه‌ی حرکت
+        if (!st.moved && Math.abs(deltaY) < 3) return;
+        st.moved = true;
 
         const deltaMin = snap(deltaY / PX_PER_MINUTE);
-        const { origStart, origEnd } = stateRef.current;
-        const duration = origEnd - origStart;
+        const duration = st.origEnd - st.origStart;
 
         if (mode === "move") {
-          let newStart = origStart + deltaMin;
-          let newEnd = origEnd + deltaMin;
+          // ۱. محاسبه‌ی زمان جدید (بر اساس روز اصلی)
+          let newStart = st.origStart + deltaMin;
+          let newEnd = st.origEnd + deltaMin;
 
           if (newStart < DAY_START_MIN) {
             newStart = DAY_START_MIN;
@@ -1164,16 +1650,34 @@ export function useDragResize({ task, onLiveChange }) {
             newEnd = DAY_END_MIN;
             newStart = newEnd - duration;
           }
-          onLiveChange({ start: newStart, end: newEnd });
+
+          // ۲. تشخیص روز جدید بر اساس موقعیت افقی موس
+          const newDayKey = detectDayKey(ev.clientX);
+
+          if (newDayKey && newDayKey !== st.currentDayKey) {
+            // روز عوض شده
+            st.currentDayKey = newDayKey;
+            if (onLiveDayChange) {
+              onLiveDayChange(newDayKey, {
+                start: newStart,
+                end: newEnd,
+              });
+            }
+          } else {
+            // همون روز، فقط موقعیت عمودی
+            onLiveChange({ start: newStart, end: newEnd });
+          }
         } else if (mode === "top") {
-          let newStart = origStart + deltaMin;
+          let newStart = st.origStart + deltaMin;
           if (newStart < DAY_START_MIN) newStart = DAY_START_MIN;
-          if (newStart > origEnd - 5) newStart = origEnd - 5;
+          if (newStart > st.origEnd - MIN_DURATION)
+            newStart = st.origEnd - MIN_DURATION;
           onLiveChange({ start: newStart });
         } else if (mode === "bottom") {
-          let newEnd = origEnd + deltaMin;
+          let newEnd = st.origEnd + deltaMin;
           if (newEnd > DAY_END_MIN) newEnd = DAY_END_MIN;
-          if (newEnd < origStart + 5) newEnd = origStart + 5;
+          if (newEnd < st.origStart + MIN_DURATION)
+            newEnd = st.origStart + MIN_DURATION;
           onLiveChange({ end: newEnd });
         }
       };
@@ -1190,12 +1694,23 @@ export function useDragResize({ task, onLiveChange }) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
     },
-    [task.start, task.end, onLiveChange]
+    [task.start, task.end, dayKey, onLiveChange, onLiveDayChange]
   );
 
   const wasDragged = () => stateRef.current?.moved ?? false;
 
   return { dragging, handleMouseDown, wasDragged };
+}
+
+function detectDayKey(clientX) {
+  const columns = document.querySelectorAll("[data-day-key]");
+  for (const col of columns) {
+    const rect = col.getBoundingClientRect();
+    if (clientX >= rect.left && clientX <= rect.right) {
+      return col.dataset.dayKey;
+    }
+  }
+  return null;
 }
 
 ──────────────────────────────────────────────────────────────────────
@@ -1219,6 +1734,7 @@ export function useNow(intervalMs = 30000) {
 ──────────────────────────────────────────────────────────────────────
 import { useEffect, useState, useCallback } from "react";
 import { EMPTY_SCHEDULE, DEFAULT_CATEGORIES, DAYS } from "../constants";
+import { findFreeSlot } from "../utils/findFreeSlot";
 
 const STORAGE_KEY = "weekly-planner-v2";
 
@@ -1230,6 +1746,19 @@ function loadFromStorage() {
   } catch {
     return null;
   }
+}
+
+function dayLabelOf(key) {
+  const map = {
+    sat: "شنبه",
+    sun: "یکشنبه",
+    mon: "دوشنبه",
+    tue: "سه‌شنبه",
+    wed: "چهارشنبه",
+    thu: "پنجشنبه",
+    fri: "جمعه",
+  };
+  return map[key] || key;
 }
 
 export function useSchedule() {
@@ -1357,6 +1886,167 @@ export function useSchedule() {
     },
   }));
 }, []);
+  const moveTaskToDay = useCallback(
+  (oldDayKey, newDayKey, taskId, patch = {}, opts = {}) => {
+    const { smart = false } = opts;
+
+    if (oldDayKey === newDayKey) {
+      setState((prev) => ({
+        ...prev,
+        schedule: {
+          ...prev.schedule,
+          [oldDayKey]: prev.schedule[oldDayKey]
+            .map((t) => (t.id === taskId ? { ...t, ...patch } : t))
+            .sort((a, b) => a.start - b.start),
+        },
+      }));
+      return;
+    }
+
+    let error = null;
+
+    setState((prev) => {
+      const task = prev.schedule[oldDayKey]?.find((t) => t.id === taskId);
+      if (!task) return prev;
+
+      const targetTasks = prev.schedule[newDayKey] || [];
+
+      let finalStart = patch.start ?? task.start;
+      let finalEnd = patch.end ?? task.end;
+
+      if (smart) {
+        const duration = finalEnd - finalStart;
+        const slot = findFreeSlot(targetTasks, duration, {
+          preferStart: finalStart,
+        });
+
+        if (!slot) {
+          error = `توی «${dayLabelOf(newDayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
+          return prev;
+        }
+        finalStart = slot.start;
+        finalEnd = slot.end;
+      }
+
+      const updatedTask = {
+        ...task,
+        ...patch,
+        start: finalStart,
+        end: finalEnd,
+      };
+
+      return {
+        ...prev,
+        schedule: {
+          ...prev.schedule,
+          [oldDayKey]: prev.schedule[oldDayKey].filter(
+            (t) => t.id !== taskId
+          ),
+          [newDayKey]: [...targetTasks, updatedTask].sort(
+            (a, b) => a.start - b.start
+          ),
+        },
+      };
+    });
+
+    if (error) alert("⚠️ " + error);
+  },
+  []
+);
+
+const duplicateTask = useCallback((dayKey, taskId) => {
+  let error = null;
+
+  setState((prev) => {
+    const dayTasks = prev.schedule[dayKey] || [];
+    const task = dayTasks.find((t) => t.id === taskId);
+    if (!task) return prev;
+
+    const duration = task.end - task.start;
+
+    const slot = findFreeSlot(dayTasks, duration, {
+      preferStart: task.start,
+      excludeId: taskId,
+    });
+
+    if (!slot) {
+      error = `توی «${dayLabelOf(dayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
+      return prev;
+    }
+
+    const newTask = {
+      ...task,
+      id: crypto.randomUUID(),
+      start: slot.start,
+      end: slot.end,
+      title: task.title + " (کپی)",
+    };
+
+    return {
+      ...prev,
+      schedule: {
+        ...prev.schedule,
+        [dayKey]: [...dayTasks, newTask].sort((a, b) => a.start - b.start),
+      },
+    };
+  });
+
+  if (error) alert("⚠️ " + error);
+}, []);
+
+const copyTaskToDay = useCallback((fromDayKey, toDayKey, taskId) => {
+  if (fromDayKey === toDayKey) {
+    return;
+  }
+
+  let error = null;
+
+  setState((prev) => {
+    const task = prev.schedule[fromDayKey]?.find((t) => t.id === taskId);
+    if (!task) return prev;
+
+    const duration = task.end - task.start;
+    const targetTasks = prev.schedule[toDayKey] || [];
+
+    const slot = findFreeSlot(targetTasks, duration, {
+      preferStart: task.start,
+    });
+
+    if (!slot) {
+      error = `توی «${dayLabelOf(toDayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
+      return prev;
+    }
+
+    const newTask = {
+      ...task,
+      id: crypto.randomUUID(),
+      start: slot.start,
+      end: slot.end,
+    };
+
+    return {
+      ...prev,
+      schedule: {
+        ...prev.schedule,
+        [toDayKey]: [...targetTasks, newTask].sort((a, b) => a.start - b.start),
+      },
+    };
+  });
+
+  if (error) alert("⚠️ " + error);
+}, []);
+
+const toggleTaskDone = useCallback((dayKey, taskId) => {
+  setState((prev) => ({
+    ...prev,
+    schedule: {
+      ...prev.schedule,
+      [dayKey]: prev.schedule[dayKey].map((t) =>
+        t.id === taskId ? { ...t, done: !t.done } : t
+      ),
+    },
+  }));
+}, []);
 
   return {
     schedule: state.schedule,
@@ -1372,6 +2062,10 @@ export function useSchedule() {
     loadTemplate,
     getTemplates,
     liveUpdateTask,
+    moveTaskToDay,
+    copyTaskToDay,
+    duplicateTask,
+    toggleTaskDone,
   };
 }
 
@@ -1542,6 +2236,52 @@ export async function exportToJPG(element, filename = "weekly-planner.jpg") {
 
     window.scrollTo(scrollX, scrollY);
   }
+}
+
+──────────────────────────────────────────────────────────────────────
+📄 src/utils/findFreeSlot.js
+──────────────────────────────────────────────────────────────────────
+import { DAY_START_MIN, DAY_END_MIN } from "../constants";
+
+export function findFreeSlot(
+  existingTasks,
+  duration,
+  { preferStart = null, excludeId = null, step = 5 } = {}
+) {
+  const tasks = existingTasks
+    .filter((t) => t.id !== excludeId)
+    .sort((a, b) => a.start - b.start);
+
+  if (preferStart !== null) {
+    const end = preferStart + duration;
+    if (
+      preferStart >= DAY_START_MIN &&
+      end <= DAY_END_MIN &&
+      !hasOverlap(tasks, preferStart, end)
+    ) {
+      return { start: preferStart, end };
+    }
+  }
+
+  let cursor = DAY_START_MIN;
+
+  for (const t of tasks) {
+    const gap = t.start - cursor;
+    if (gap >= duration) {
+      return { start: cursor, end: cursor + duration };
+    }
+    cursor = Math.max(cursor, t.end);
+  }
+
+  if (DAY_END_MIN - cursor >= duration) {
+    return { start: cursor, end: cursor + duration };
+  }
+
+  return null;
+}
+
+function hasOverlap(tasks, start, end) {
+  return tasks.some((t) => start < t.end && end > t.start);
 }
 
 ──────────────────────────────────────────────────────────────────────

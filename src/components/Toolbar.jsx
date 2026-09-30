@@ -20,6 +20,7 @@ export default function Toolbar({
         <div className="flex flex-wrap items-center gap-2">
           <ToolbarButton onClick={onOpenCategories} icon="🎨" label="دسته‌ها" />
           <ToolbarButton onClick={onSaveTemplate} icon="💾" label="ذخیره قالب" />
+          <ToolbarButton onClick={() => onToggleHelp?.()} icon="⌨️" label="میانبرها" />
 
           {templates.length > 0 && (
             <select

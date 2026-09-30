@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { EMPTY_SCHEDULE, DEFAULT_CATEGORIES, DAYS } from "../constants";
 import { findFreeSlot } from "../utils/findFreeSlot";
 
@@ -36,11 +36,50 @@ export function useSchedule() {
     };
   });
 
+  const [past, setPast] = useState([]);
+  const [future, setFuture] = useState([]);
+  const MAX_HISTORY = 50;
+
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const snapshot = useCallback(() => {
+    setPast((p) => {
+      const next = [...p, stateRef.current];
+      return next.length > MAX_HISTORY ? next.slice(-MAX_HISTORY) : next;
+    });
+    setFuture([]);
+  }, []);
+
+  const undo = useCallback(() => {
+    setPast((p) => {
+      if (p.length === 0) return p;
+      const previous = p[p.length - 1];
+      setFuture((f) => [stateRef.current, ...f].slice(0, MAX_HISTORY));
+      setState(previous);
+      return p.slice(0, -1);
+    });
+  }, []);
+
+  const redo = useCallback(() => {
+    setFuture((f) => {
+      if (f.length === 0) return f;
+      const next = f[0];
+      setPast((p) => [...p, stateRef.current].slice(-MAX_HISTORY));
+      setState(next);
+      return f.slice(1);
+    });
+  }, []);
+
+  const canUndo = past.length > 0;
+  const canRedo = future.length > 0;
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
   const addTask = useCallback((dayKey, task) => {
+    snapshot();
     setState((prev) => ({
       ...prev,
       schedule: {
@@ -53,6 +92,7 @@ export function useSchedule() {
   }, []);
 
   const updateTask = useCallback((dayKey, taskId, patch) => {
+    snapshot();
     setState((prev) => ({
       ...prev,
       schedule: {
@@ -65,6 +105,7 @@ export function useSchedule() {
   }, []);
 
   const removeTask = useCallback((dayKey, taskId) => {
+    snapshot();
     setState((prev) => ({
       ...prev,
       schedule: {
@@ -75,6 +116,7 @@ export function useSchedule() {
   }, []);
 
   const clearAll = useCallback(() => {
+    snapshot();
     if (confirm("مطمئنی می‌خوای همه‌ی برنامه‌ها پاک بشن؟")) {
       setState((prev) => ({ ...prev, schedule: EMPTY_SCHEDULE }));
     }
@@ -110,6 +152,7 @@ export function useSchedule() {
   }, []);
 
   const addCategory = useCallback((category) => {
+    snapshot();
     setState((prev) => ({
       ...prev,
       categories: [...prev.categories, category],
@@ -117,6 +160,7 @@ export function useSchedule() {
   }, []);
 
   const updateCategory = useCallback((id, patch) => {
+    snapshot();
     setState((prev) => ({
       ...prev,
       categories: prev.categories.map((c) =>
@@ -126,6 +170,7 @@ export function useSchedule() {
   }, []);
 
   const removeCategory = useCallback((id) => {
+    snapshot();
     setState((prev) => {
       const inUse = DAYS.some((d) =>
         prev.schedule[d.key].some((t) => t.categoryId === id)
@@ -142,177 +187,181 @@ export function useSchedule() {
   }, []);
 
   const liveUpdateTask = useCallback((dayKey, taskId, patch) => {
-  setState((prev) => ({
-    ...prev,
-    schedule: {
-      ...prev.schedule,
-      [dayKey]: prev.schedule[dayKey].map((t) =>
-        t.id === taskId ? { ...t, ...patch } : t
-      ),
-    },
-  }));
-}, []);
+    setState((prev) => ({
+      ...prev,
+      schedule: {
+        ...prev.schedule,
+        [dayKey]: prev.schedule[dayKey].map((t) =>
+          t.id === taskId ? { ...t, ...patch } : t
+        ),
+      },
+    }));
+  }, []);
   const moveTaskToDay = useCallback(
-  (oldDayKey, newDayKey, taskId, patch = {}, opts = {}) => {
-    const { smart = false } = opts;
+    (oldDayKey, newDayKey, taskId, patch = {}, opts = {}) => {
+      const { smart = false, noHistory = false } = opts;
+      if (!noHistory) snapshot();
 
-    if (oldDayKey === newDayKey) {
-      setState((prev) => ({
-        ...prev,
-        schedule: {
-          ...prev.schedule,
-          [oldDayKey]: prev.schedule[oldDayKey]
-            .map((t) => (t.id === taskId ? { ...t, ...patch } : t))
-            .sort((a, b) => a.start - b.start),
-        },
-      }));
-      return;
-    }
+      if (oldDayKey === newDayKey) {
+        setState((prev) => ({
+          ...prev,
+          schedule: {
+            ...prev.schedule,
+            [oldDayKey]: prev.schedule[oldDayKey]
+              .map((t) => (t.id === taskId ? { ...t, ...patch } : t))
+              .sort((a, b) => a.start - b.start),
+          },
+        }));
+        return;
+      }
 
+      let error = null;
+
+      setState((prev) => {
+        const task = prev.schedule[oldDayKey]?.find((t) => t.id === taskId);
+        if (!task) return prev;
+
+        const targetTasks = prev.schedule[newDayKey] || [];
+
+        let finalStart = patch.start ?? task.start;
+        let finalEnd = patch.end ?? task.end;
+
+        if (smart) {
+          const duration = finalEnd - finalStart;
+          const slot = findFreeSlot(targetTasks, duration, {
+            preferStart: finalStart,
+          });
+
+          if (!slot) {
+            error = `توی «${dayLabelOf(newDayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
+            return prev;
+          }
+          finalStart = slot.start;
+          finalEnd = slot.end;
+        }
+
+        const updatedTask = {
+          ...task,
+          ...patch,
+          start: finalStart,
+          end: finalEnd,
+        };
+
+        return {
+          ...prev,
+          schedule: {
+            ...prev.schedule,
+            [oldDayKey]: prev.schedule[oldDayKey].filter(
+              (t) => t.id !== taskId
+            ),
+            [newDayKey]: [...targetTasks, updatedTask].sort(
+              (a, b) => a.start - b.start
+            ),
+          },
+        };
+      });
+
+      if (error) alert("⚠️ " + error);
+    },
+    [snapshot]
+  );
+
+  const duplicateTask = useCallback((dayKey, taskId) => {
+    snapshot();
     let error = null;
 
     setState((prev) => {
-      const task = prev.schedule[oldDayKey]?.find((t) => t.id === taskId);
+      const dayTasks = prev.schedule[dayKey] || [];
+      const task = dayTasks.find((t) => t.id === taskId);
       if (!task) return prev;
 
-      const targetTasks = prev.schedule[newDayKey] || [];
+      const duration = task.end - task.start;
 
-      let finalStart = patch.start ?? task.start;
-      let finalEnd = patch.end ?? task.end;
+      const slot = findFreeSlot(dayTasks, duration, {
+        preferStart: task.start,
+        excludeId: taskId,
+      });
 
-      if (smart) {
-        const duration = finalEnd - finalStart;
-        const slot = findFreeSlot(targetTasks, duration, {
-          preferStart: finalStart,
-        });
-
-        if (!slot) {
-          error = `توی «${dayLabelOf(newDayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
-          return prev;
-        }
-        finalStart = slot.start;
-        finalEnd = slot.end;
+      if (!slot) {
+        error = `توی «${dayLabelOf(dayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
+        return prev;
       }
 
-      const updatedTask = {
+      const newTask = {
         ...task,
-        ...patch,
-        start: finalStart,
-        end: finalEnd,
+        id: crypto.randomUUID(),
+        start: slot.start,
+        end: slot.end,
+        title: task.title + " (کپی)",
       };
 
       return {
         ...prev,
         schedule: {
           ...prev.schedule,
-          [oldDayKey]: prev.schedule[oldDayKey].filter(
-            (t) => t.id !== taskId
-          ),
-          [newDayKey]: [...targetTasks, updatedTask].sort(
-            (a, b) => a.start - b.start
-          ),
+          [dayKey]: [...dayTasks, newTask].sort((a, b) => a.start - b.start),
         },
       };
     });
 
     if (error) alert("⚠️ " + error);
-  },
-  []
-);
+  }, []);
 
-const duplicateTask = useCallback((dayKey, taskId) => {
-  let error = null;
-
-  setState((prev) => {
-    const dayTasks = prev.schedule[dayKey] || [];
-    const task = dayTasks.find((t) => t.id === taskId);
-    if (!task) return prev;
-
-    const duration = task.end - task.start;
-
-    const slot = findFreeSlot(dayTasks, duration, {
-      preferStart: task.start,
-      excludeId: taskId,
-    });
-
-    if (!slot) {
-      error = `توی «${dayLabelOf(dayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
-      return prev;
+  const copyTaskToDay = useCallback((fromDayKey, toDayKey, taskId) => {
+    snapshot();
+    if (fromDayKey === toDayKey) {
+      return;
     }
 
-    const newTask = {
-      ...task,
-      id: crypto.randomUUID(),
-      start: slot.start,
-      end: slot.end,
-      title: task.title + " (کپی)",
-    };
+    let error = null;
 
-    return {
+    setState((prev) => {
+      const task = prev.schedule[fromDayKey]?.find((t) => t.id === taskId);
+      if (!task) return prev;
+
+      const duration = task.end - task.start;
+      const targetTasks = prev.schedule[toDayKey] || [];
+
+      const slot = findFreeSlot(targetTasks, duration, {
+        preferStart: task.start,
+      });
+
+      if (!slot) {
+        error = `توی «${dayLabelOf(toDayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
+        return prev;
+      }
+
+      const newTask = {
+        ...task,
+        id: crypto.randomUUID(),
+        start: slot.start,
+        end: slot.end,
+      };
+
+      return {
+        ...prev,
+        schedule: {
+          ...prev.schedule,
+          [toDayKey]: [...targetTasks, newTask].sort((a, b) => a.start - b.start),
+        },
+      };
+    });
+
+    if (error) alert("⚠️ " + error);
+  }, []);
+
+  const toggleTaskDone = useCallback((dayKey, taskId) => {
+    snapshot();
+    setState((prev) => ({
       ...prev,
       schedule: {
         ...prev.schedule,
-        [dayKey]: [...dayTasks, newTask].sort((a, b) => a.start - b.start),
+        [dayKey]: prev.schedule[dayKey].map((t) =>
+          t.id === taskId ? { ...t, done: !t.done } : t
+        ),
       },
-    };
-  });
-
-  if (error) alert("⚠️ " + error);
-}, []);
-
-const copyTaskToDay = useCallback((fromDayKey, toDayKey, taskId) => {
-  if (fromDayKey === toDayKey) {
-    return;
-  }
-
-  let error = null;
-
-  setState((prev) => {
-    const task = prev.schedule[fromDayKey]?.find((t) => t.id === taskId);
-    if (!task) return prev;
-
-    const duration = task.end - task.start;
-    const targetTasks = prev.schedule[toDayKey] || [];
-
-    const slot = findFreeSlot(targetTasks, duration, {
-      preferStart: task.start,
-    });
-
-    if (!slot) {
-      error = `توی «${dayLabelOf(toDayKey)}» جای خالی به اندازه‌ی ${duration} دقیقه وجود نداره.`;
-      return prev;
-    }
-
-    const newTask = {
-      ...task,
-      id: crypto.randomUUID(),
-      start: slot.start,
-      end: slot.end,
-    };
-
-    return {
-      ...prev,
-      schedule: {
-        ...prev.schedule,
-        [toDayKey]: [...targetTasks, newTask].sort((a, b) => a.start - b.start),
-      },
-    };
-  });
-
-  if (error) alert("⚠️ " + error);
-}, []);
-
-const toggleTaskDone = useCallback((dayKey, taskId) => {
-  setState((prev) => ({
-    ...prev,
-    schedule: {
-      ...prev.schedule,
-      [dayKey]: prev.schedule[dayKey].map((t) =>
-        t.id === taskId ? { ...t, done: !t.done } : t
-      ),
-    },
-  }));
-}, []);
+    }));
+  }, []);
 
   return {
     schedule: state.schedule,
@@ -332,5 +381,10 @@ const toggleTaskDone = useCallback((dayKey, taskId) => {
     copyTaskToDay,
     duplicateTask,
     toggleTaskDone,
+    snapshot,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   };
 }

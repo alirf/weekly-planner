@@ -6,6 +6,7 @@ export default function TaskBlock({
   dayKey,
   category,
   isDragging,
+  isSelected,
   onStartDrag,
   onContextMenu,
   onToggleDone,
@@ -37,11 +38,14 @@ export default function TaskBlock({
 
   return (
     <div
-      className={`task-block absolute right-1 left-1 rounded-lg overflow-hidden select-none group ${isDragging
-        ? "z-40 shadow-2xl ring-2 ring-white/80 dark:ring-white/40 cursor-grabbing"
-        : done
-          ? "opacity-55 hover:opacity-80 shadow-sm"
-          : "shadow-md hover:shadow-lg hover:z-20"
+      className={`task-block absolute right-1 left-1 rounded-lg overflow-hidden select-none group ${
+        isDragging
+    ? "z-40 shadow-2xl ring-2 ring-white/80 dark:ring-white/40 cursor-grabbing"
+    : isSelected
+    ? "ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-1 dark:ring-offset-slate-900 shadow-lg z-20"
+    : done
+    ? "opacity-55 hover:opacity-80 shadow-sm"
+    : "shadow-md hover:shadow-lg hover:z-20"
         }`}
       style={{
         top: `${top}px`,
@@ -112,7 +116,7 @@ export default function TaskBlock({
             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
           </svg>
         )}
-      </button>ّ
+      </button>
 
       <div
         onMouseDown={handleMouseDown("top")}
